@@ -147,11 +147,6 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                             <span className="font-bold text-neutral-900 block line-clamp-1">
                               {prod.name}
                             </span>
-                            {prod.story && (
-                              <span className="text-[11px] text-neutral-500 italic block line-clamp-1">
-                                "{prod.story}"
-                              </span>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -163,16 +158,30 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                         </span>
                       </td>
 
-                      {/* Condition */}
+                      {/* Condition & Minus */}
                       <td className="py-3 px-4">
                         <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200">
                           {prod.condition}
                         </span>
+                        {prod.minus_points && prod.minus_points.length > 0 ? (
+                          <span className="block text-[10px] text-amber-700 font-medium mt-1">
+                            {prod.minus_points.length} minus tercatat
+                          </span>
+                        ) : (
+                          <span className="block text-[10px] text-emerald-600 font-medium mt-1">
+                            Mulus tanpa minus
+                          </span>
+                        )}
                       </td>
 
-                      {/* Price */}
+                      {/* Price & Original Price */}
                       <td className="py-3 px-4 font-mono font-bold text-neutral-900 whitespace-nowrap">
-                        {formatIDR(prod.price)}
+                        <div>{formatIDR(prod.price)}</div>
+                        {prod.original_price && prod.original_price > prod.price && (
+                          <div className="text-[10px] text-neutral-400 line-through font-normal">
+                            Baru: {formatIDR(prod.original_price)}
+                          </div>
+                        )}
                       </td>
 
                       {/* Status toggle */}

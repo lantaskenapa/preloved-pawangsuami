@@ -71,40 +71,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           )}
         </div>
 
-        {/* Content Body */}
-        <div className="p-3 sm:p-5">
+        {/* Content Body: Berbeda Tone Antara Judul Produk dan Harga */}
+        <div className="p-3 sm:p-4">
           {/* Category breadcrumb */}
-          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold text-neutral-500 mb-1">
+          <div className="text-[10px] sm:text-[11px] uppercase tracking-wider font-semibold text-neutral-400 mb-1">
             {product.category}
           </div>
 
-          {/* Title */}
+          {/* Title: Tone Abu-Abu Charcoal Medium (Informational Context) */}
           <h3 
             onClick={() => onSelect(product)}
-            className="font-bold text-neutral-900 text-xs sm:text-base leading-snug line-clamp-2 cursor-pointer hover:text-neutral-700 transition-colors"
+            className="text-neutral-600 text-xs sm:text-sm font-medium leading-snug line-clamp-2 cursor-pointer hover:text-neutral-950 transition-colors h-8 sm:h-10"
             title={product.name}
           >
             {product.name}
           </h3>
 
-          {/* Husband's Story Teaser (Desktop only to keep mobile 2-col neat) */}
-          {product.story && (
-            <p className="hidden sm:block mt-2 text-xs text-neutral-500 line-clamp-2 italic bg-neutral-50 p-2 rounded-lg border border-neutral-100">
-              "{product.story}"
-            </p>
-          )}
-
-          {/* Price */}
-          <div className="mt-2 sm:mt-3.5 flex items-baseline gap-2">
-            <span className="text-sm sm:text-xl font-extrabold text-neutral-900 tracking-tight">
+          {/* Price: Tone Hitam Pekat Tegas & Kontras (Primary Financial Figure) */}
+          <div className="mt-2.5 pt-2 border-t border-neutral-100 flex items-baseline">
+            <span className="text-sm sm:text-base font-extrabold text-neutral-950 tracking-tight font-mono">
               {formatIDR(product.price)}
             </span>
           </div>
+
         </div>
       </div>
 
       {/* Action Footer */}
-      <div className="p-3 sm:p-5 pt-0 mt-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
+      <div className="p-3 sm:p-4 pt-0 mt-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 sm:gap-2">
         {/* Shopee Buy Button */}
         <a
           href={product.shopee_url}

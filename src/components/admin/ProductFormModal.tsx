@@ -7,10 +7,7 @@ import {
   Plus,
   Trash2,
   Image as ImageIcon,
-  Sparkles,
-  Link as LinkIcon,
   ShoppingBag,
-  Check,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -46,16 +43,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   const [name, setName] = useState('');
   const [priceInput, setPriceInput] = useState('');
+  const [originalPriceInput, setOriginalPriceInput] = useState('');
   const [category, setCategory] = useState('');
   const [condition, setCondition] = useState<ProductCondition>('Sangat Baik (90-95%)');
   const [description, setDescription] = useState('');
-  const [story, setStory] = useState('');
   const [shopeeUrl, setShopeeUrl] = useState('');
   const [status, setStatus] = useState<ProductStatus>('published');
   const [images, setImages] = useState<string[]>([]);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [completenessInput, setCompletenessInput] = useState('');
   const [completenessList, setCompletenessList] = useState<string[]>([]);
+  const [minusPointInput, setMinusPointInput] = useState('');
+  const [minusPointsList, setMinusPointsList] = useState<string[]>([]);
   const [isFeatured, setIsFeatured] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -63,26 +62,28 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     if (productToEdit) {
       setName(productToEdit.name);
       setPriceInput(productToEdit.price.toString());
+      setOriginalPriceInput(productToEdit.original_price ? productToEdit.original_price.toString() : '');
       setCategory(productToEdit.category);
       setCondition(productToEdit.condition);
       setDescription(productToEdit.description);
-      setStory(productToEdit.story || '');
       setShopeeUrl(productToEdit.shopee_url);
       setStatus(productToEdit.status);
       setImages(productToEdit.images || []);
       setCompletenessList(productToEdit.completeness || []);
+      setMinusPointsList(productToEdit.minus_points || []);
       setIsFeatured(!!productToEdit.is_featured);
     } else {
       setName('');
       setPriceInput('');
+      setOriginalPriceInput('');
       setCategory(categories[0]?.slug || 'games');
       setCondition('Sangat Baik (90-95%)');
       setDescription('');
-      setStory('');
       setShopeeUrl('https://shopee.co.id');
       setStatus('published');
       setImages([]);
       setCompletenessList(['Unit Original', 'Box Bawaan']);
+      setMinusPointsList([]);
       setIsFeatured(false);
     }
   }, [productToEdit, categories, isOpen]);
@@ -137,6 +138,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setCompletenessList((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const handleAddMinusPoint = () => {
+    if (!minusPointInput.trim()) return;
+    setMinusPointsList((prev) => [...prev, minusPointInput.trim()]);
+    setMinusPointInput('');
+  };
+
+  const handleRemoveMinusPoint = (idx: number) => {
+    setMinusPointsList((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -159,14 +170,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         id: productToEdit?.id,
         name: name.trim(),
         price: parsedPrice,
+        original_price: originalPriceInput ? parseIDRInput(originalPriceInput) : undefined,
         category,
         condition,
         description: description.trim(),
-        story: story.trim(),
         shopee_url: shopeeUrl.trim(),
         status,
         images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
         completeness: completenessList,
+        minus_points: minusPointsList,
         is_featured: isFeatured,
       });
       showToast(productToEdit ? 'Produk berhasil diperbarui!' : 'Produk baru berhasil ditambahkan!', 'success');
@@ -240,11 +252,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </div>
           </div>
 
-          {/* Row 2: Price & Category & Condition */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Row 2: Price & Original Price & Category & Condition */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                Harga (IDR) *
+                Harga Preloved (IDR) *
               </label>
               <input
                 type="text"
@@ -256,6 +268,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               />
               <span className="text-[11px] text-neutral-500 mt-1 block">
                 Tampilan: {formatIDR(parseIDRInput(priceInput))}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
+                Harga Baru Toko (IDR)
+              </label>
+              <input
+                type="text"
+                value={originalPriceInput}
+                onChange={(e) => setOriginalPriceInput(e.target.value)}
+                placeholder="Contoh: 2499000 (Opsional)"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-hidden focus:border-neutral-900 font-mono"
+              />
+              <span className="text-[11px] text-neutral-500 mt-1 block">
+                {originalPriceInput ? formatIDR(parseIDRInput(originalPriceInput)) : 'Tidak ditampilkan jika kosong'}
               </span>
             </div>
 
@@ -408,25 +436,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             )}
           </div>
 
-          {/* Row 5: Cerita Barang (Husband's story) */}
-          <div>
-            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-neutral-900" />
-              <span>Cerita Barang (Kisah dari Suami)</span>
-            </label>
-            <textarea
-              rows={2}
-              value={story}
-              onChange={(e) => setStory(e.target.value)}
-              placeholder="Contoh: Dibeli suami pas lagi demam main Zelda. Sekarang tamat dan konsol cuma nganggur di laci TV, mending dijual buat tambah belanja."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-hidden focus:border-neutral-900 leading-relaxed italic"
-            />
-            <span className="text-[11px] text-neutral-500 mt-1 block">
-              Sentuhan cerita personal khas Pawang Suami Preloved agar pembeli lebih percaya dan terhibur.
-            </span>
-          </div>
-
-          {/* Row 6: Description */}
+          {/* Description */}
           <div>
             <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
               Deskripsi & Spesifikasi Produk *
@@ -487,6 +497,66 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </span>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Row: Poin-Poin Minus Barang */}
+          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-amber-950 uppercase tracking-wider mb-1">
+                Poin-Poin Minus / Catatan Fisik Barang
+              </label>
+              <p className="text-[11px] text-amber-800 mb-2">
+                Poin minus ini akan langsung terlihat di kartu katalog produk dan detail produk agar pembeli mendapatkan info jujur dan transparan.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={minusPointInput}
+                onChange={(e) => setMinusPointInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddMinusPoint();
+                  }
+                }}
+                placeholder="Contoh: Baret halus di sudut bawah, Dus sedikit penyok"
+                className="flex-1 px-3 py-2 rounded-xl border border-amber-300 text-xs text-neutral-900 bg-white"
+              />
+              <button
+                type="button"
+                onClick={handleAddMinusPoint}
+                className="px-3.5 py-2 rounded-xl bg-amber-900 hover:bg-amber-950 text-white text-xs font-semibold"
+              >
+                Tambah Minus
+              </button>
+            </div>
+
+            {minusPointsList.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {minusPointsList.map((item, idx) => (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-amber-950 text-xs font-medium border border-amber-200 shadow-2xs"
+                  >
+                    <span>• {item}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMinusPoint(idx)}
+                      className="text-amber-500 hover:text-red-600"
+                      title="Hapus poin minus"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-amber-700 italic">
+                Belum ada poin minus ditambahkan (Barang akan ditandai mulus tanpa minus).
+              </p>
             )}
           </div>
 

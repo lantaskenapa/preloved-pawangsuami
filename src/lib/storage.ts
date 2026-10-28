@@ -24,9 +24,37 @@ export function initializeStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) {
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
   }
-  if (!localStorage.getItem(STORAGE_KEYS.PRODUCTS)) {
+  
+  const existingProdsRaw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  if (!existingProdsRaw) {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+  } else {
+    // If existing products lack minus_points or original_price, merge from seed
+    try {
+      const parsed: Product[] = JSON.parse(existingProdsRaw);
+      let needsUpdate = false;
+      const updated = parsed.map((p) => {
+        const seedMatch = INITIAL_PRODUCTS.find((sp) => sp.id === p.id);
+        if (seedMatch) {
+          if (!p.minus_points || p.minus_points.length === 0) {
+            p.minus_points = seedMatch.minus_points;
+            needsUpdate = true;
+          }
+          if (!p.original_price && seedMatch.original_price) {
+            p.original_price = seedMatch.original_price;
+            needsUpdate = true;
+          }
+        }
+        return p;
+      });
+      if (needsUpdate) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(updated));
+      }
+    } catch {
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    }
   }
+
   if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
   }
@@ -106,11 +134,13 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
       name: productInput.name,
       slug: productInput.slug || slugify(productInput.name),
       price: productInput.price || 0,
+      original_price: productInput.original_price || undefined,
       category: productInput.category || 'others',
       condition: productInput.condition || 'Sangat Baik (90-95%)',
       description: productInput.description || '',
       story: productInput.story || '',
       completeness: productInput.completeness || [],
+      minus_points: productInput.minus_points || [],
       images: productInput.images && productInput.images.length > 0 
         ? productInput.images 
         : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],

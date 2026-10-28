@@ -11,11 +11,13 @@ export interface Product {
   name: string;
   slug: string;
   price: number;
+  original_price?: number; // Harga baru toko / retail asli
   category: string; // matches Category slug or id
   condition: ProductCondition;
   description: string;
-  story: string; // "Cerita Barang" - riwayat barang suami
+  story?: string;
   completeness: string[]; // e.g. ["Box Original", "Kabel Bawaan", "Nota Pembelian"]
+  minus_points?: string[]; // Poin-poin minus fisik / pemakaian
   images: string[];
   shopee_url: string;
   status: ProductStatus;

@@ -10,8 +10,7 @@ import {
   Truck,
   Share2,
   MessageCircle,
-  Heart,
-  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -143,30 +142,43 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {product.name}
               </h2>
 
-              {/* Price */}
-              <div className="mt-4 pb-4 border-b border-neutral-200 flex items-baseline justify-between">
-                <div>
-                  <span className="text-2xl sm:text-3xl font-extrabold text-neutral-950 tracking-tight">
-                    {formatIDR(product.price)}
-                  </span>
-                  <p className="text-xs text-neutral-600 mt-0.5">
-                    Harga nett via Shopee (Bisa klaim Gratis Ongkir & Voucher Diskon)
-                  </p>
+              {/* Price & Original Price */}
+              <div className="mt-4 pb-4 border-b border-neutral-200">
+                {product.original_price && product.original_price > product.price && (
+                  <div className="text-xs text-neutral-400 mb-1">
+                    Harga Baru: <span className="line-through">{formatIDR(product.original_price)}</span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between">
+                  <div>
+                    <span className="text-2xl sm:text-3xl font-extrabold text-neutral-950 tracking-tight">
+                      {formatIDR(product.price)}
+                    </span>
+                    <p className="text-xs text-neutral-600 mt-0.5">
+                      Harga preloved via Shopee (Bisa klaim Gratis Ongkir & Voucher Diskon)
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Cerita Barang (Husband's story) */}
-              {product.story && (
-                <div className="mt-4 p-4 rounded-2xl bg-neutral-50 border border-neutral-200/80">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-800 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-neutral-900" />
-                    <span>Cerita Barang (Kisah dari Suami)</span>
+              {/* Poin-Poin Minus (Format List) */}
+              <div className="mt-5">
+                <h4 className="text-xs font-bold text-neutral-900 uppercase tracking-wider mb-2">
+                  Poin-Poin Minus
+                </h4>
+                {product.minus_points && product.minus_points.length > 0 ? (
+                  <ul className="space-y-1.5 pl-4 list-disc text-xs sm:text-sm text-neutral-700">
+                    {product.minus_points.map((pt, i) => (
+                      <li key={i} className="leading-relaxed">{pt}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Kondisi mulus tanpa minus</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-neutral-600 italic leading-relaxed">
-                    "{product.story}"
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Deskripsi Barang */}
               <div className="mt-5">

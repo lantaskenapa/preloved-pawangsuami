@@ -1,6 +1,7 @@
 import React from 'react';
 import { StoreSettings } from '../../types';
 import { ShoppingBag, ArrowUpRight, ShieldCheck, MapPin, Clock, Lock, Sparkles } from 'lucide-react';
+import { BrandLogo } from '../ui/BrandLogo';
 
 interface FooterProps {
   settings: StoreSettings;
@@ -23,12 +24,10 @@ export const Footer: React.FC<FooterProps> = ({
           {/* Brand Info */}
           <div className="md:col-span-2 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white text-neutral-950 font-extrabold flex items-center justify-center text-base">
-                PS
-              </div>
+              <BrandLogo className="w-10 h-10 border border-neutral-700" />
               <div className="flex flex-col leading-none">
-                <span className="text-base font-extrabold text-white tracking-tight">Pawang</span>
-                <span className="text-xs font-bold text-neutral-400 tracking-tight mt-0.5">Suami Preloved</span>
+                <span className="text-base font-extrabold text-white tracking-tight">Pawang Suami</span>
+                <span className="text-xs font-bold text-neutral-400 tracking-tight mt-0.5">Preloved</span>
               </div>
             </div>
 
