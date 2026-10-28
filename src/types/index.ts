@@ -4,7 +4,7 @@ export type ProductCondition =
   | 'Baik (80-89%)'
   | 'Minus Pemakaian (Wajar)';
 
-export type ProductStatus = 'published' | 'draft';
+export type ProductStatus = 'published' | 'draft' | 'sold' | 'booked';
 
 export interface Product {
   id: string;

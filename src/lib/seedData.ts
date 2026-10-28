@@ -221,7 +221,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=1000&q=80'
     ],
     shopee_url: 'https://shopee.co.id/product/12849102/2940182916',
-    status: 'published',
+    status: 'booked',
     is_featured: false,
     weight_grams: 300,
     created_at: '2026-10-08T08:30:00Z',
@@ -246,7 +246,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=1000&q=80'
     ],
     shopee_url: 'https://shopee.co.id/product/12849102/2940182917',
-    status: 'published',
+    status: 'sold',
     is_featured: false,
     weight_grams: 480,
     created_at: '2026-10-05T13:45:00Z',

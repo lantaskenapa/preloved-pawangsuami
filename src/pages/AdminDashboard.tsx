@@ -29,6 +29,7 @@ interface AdminDashboardProps {
   onSaveProduct: (prod: Partial<Product> & { name: string; price: number; category: string }) => Promise<void>;
   onDeleteProduct: (id: string) => Promise<void>;
   onToggleStatus: (id: string) => Promise<void>;
+  onUpdateStatus?: (id: string, status: any) => Promise<void>;
   onSaveCategory: (cat: Partial<Category> & { name: string }) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
   onSaveSettings: (set: Partial<StoreSettings>) => Promise<void>;
@@ -46,6 +47,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSaveProduct,
   onDeleteProduct,
   onToggleStatus,
+  onUpdateStatus,
   onSaveCategory,
   onDeleteCategory,
   onSaveSettings,
@@ -69,7 +71,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Computations for KPI cards
   const publishedCount = products.filter((p) => p.status === 'published').length;
+  const soldCount = products.filter((p) => p.status === 'sold').length;
+  const bookedCount = products.filter((p) => p.status === 'booked').length;
   const draftCount = products.filter((p) => p.status === 'draft').length;
+  const soldRevenue = products.filter((p) => p.status === 'sold').reduce((acc, p) => acc + (p.price || 0), 0);
   const totalInventoryValue = products.reduce((acc, p) => acc + (p.price || 0), 0);
 
   const handleOpenNewProduct = () => {
@@ -176,8 +181,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono">
               {products.length}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1 flex items-center gap-1">
-              <span>{publishedCount} tayang</span>
+            <div className="text-[11px] text-neutral-500 mt-1 flex flex-wrap items-center gap-1">
+              <span>{publishedCount} ready</span>
+              <span>•</span>
+              <span>{soldCount} laku</span>
               <span>•</span>
               <span>{draftCount} draf</span>
             </div>
@@ -185,27 +192,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200/90 shadow-2xs">
             <div className="flex items-center justify-between text-neutral-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Published</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Tersedia (Ready)</span>
               <Eye className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-600 font-mono">
               {publishedCount}
             </div>
             <div className="text-[11px] text-neutral-500 mt-1">
-              Aktif terlihat di katalog publik
+              Aktif dijual & siap kirim di Shopee
             </div>
           </div>
 
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200/90 shadow-2xs">
             <div className="flex items-center justify-between text-neutral-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Kategori</span>
-              <Layers className="w-4 h-4 text-neutral-700" />
+              <span className="text-xs font-bold uppercase tracking-wider">Terjual (Sold)</span>
+              <ShoppingBag className="w-4 h-4 text-red-600" />
             </div>
-            <div className="text-2xl sm:text-3xl font-extrabold text-neutral-900 font-mono">
-              {categories.length}
+            <div className="text-2xl sm:text-3xl font-extrabold text-red-600 font-mono">
+              {soldCount}
             </div>
-            <div className="text-[11px] text-neutral-500 mt-1">
-              Games, Shirts, Electronics, dll.
+            <div className="text-[11px] text-neutral-500 mt-1 truncate">
+              Laku: <strong>{formatIDR(soldRevenue)}</strong>
             </div>
           </div>
 
@@ -271,6 +278,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onEdit={handleOpenEditProduct}
             onDeleteRequest={(prod) => setProductToDelete(prod)}
             onToggleStatus={onToggleStatus}
+            onUpdateStatus={onUpdateStatus}
           />
         )}
 

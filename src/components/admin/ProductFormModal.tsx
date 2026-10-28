@@ -243,11 +243,17 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold focus:outline-hidden ${
                   status === 'published'
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                    : 'border-amber-300 bg-amber-50 text-amber-800'
+                    : status === 'sold'
+                      ? 'border-red-300 bg-red-50 text-red-800'
+                      : status === 'booked'
+                        ? 'border-amber-300 bg-amber-50 text-amber-800'
+                        : 'border-neutral-300 bg-neutral-100 text-neutral-800'
                 }`}
               >
-                <option value="published">Published (Tampil di Publik)</option>
-                <option value="draft">Draft (Hanya Admin)</option>
+                <option value="published">Tersedia (Published - Siap Jual)</option>
+                <option value="sold">Terjual (Sold Out - Laku)</option>
+                <option value="booked">Dibooking (Booked - Menunggu Bayar)</option>
+                <option value="draft">Draf (Draft - Hanya Admin)</option>
               </select>
             </div>
           </div>

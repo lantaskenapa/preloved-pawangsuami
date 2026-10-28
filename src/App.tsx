@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Category, Product, StoreSettings } from './types';
+import { Category, Product, ProductStatus, StoreSettings } from './types';
 import {
   getProducts,
   getCategories,
@@ -7,6 +7,7 @@ import {
   saveProduct,
   deleteProduct,
   toggleProductStatus,
+  updateProductStatus,
   saveCategory,
   deleteCategory,
   saveStoreSettings,
@@ -114,6 +115,18 @@ function MainApp() {
     showToast('Status produk berhasil diperbarui!', 'success');
   };
 
+  const handleUpdateProductStatus = async (id: string, newStatus: ProductStatus) => {
+    await updateProductStatus(id, newStatus);
+    await refreshData();
+    const labels: Record<ProductStatus, string> = {
+      published: 'Ready (Tersedia)',
+      sold: 'Terjual (Sold Out)',
+      booked: 'Dibooking (Booked)',
+      draft: 'Draf',
+    };
+    showToast(`Status produk diubah menjadi ${labels[newStatus]}`, 'success');
+  };
+
   const handleSaveCategory = async (catData: Partial<Category> & { name: string }) => {
     await saveCategory(catData);
     await refreshData();
@@ -205,6 +218,7 @@ function MainApp() {
         onSaveProduct={handleSaveProduct}
         onDeleteProduct={handleDeleteProduct}
         onToggleStatus={handleToggleProductStatus}
+        onUpdateStatus={handleUpdateProductStatus}
         onSaveCategory={handleSaveCategory}
         onDeleteCategory={handleDeleteCategory}
         onSaveSettings={handleSaveSettings}

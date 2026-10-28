@@ -131,16 +131,47 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 <span className="text-xs font-bold uppercase tracking-wider text-neutral-600">
                   {product.category}
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Siap Kirim
-                </span>
+                {product.status === 'sold' ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                    Sudah Terjual (Sold Out)
+                  </span>
+                ) : product.status === 'booked' ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>
+                    Sedang Dibooking
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    Siap Kirim
+                  </span>
+                )}
               </div>
 
               {/* Title */}
               <h2 className="mt-2 text-xl sm:text-2xl font-extrabold text-neutral-900 leading-snug">
                 {product.name}
               </h2>
+
+              {/* Status Alert Banner if Sold / Booked */}
+              {product.status === 'sold' && (
+                <div className="mt-3 p-3.5 rounded-xl bg-red-50 border border-red-200/80 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <div className="text-xs text-red-900 leading-relaxed">
+                    <strong>Barang Ini Sudah Laku Terjual:</strong> Telah berhasil di-checkout dan terkirim ke pemilik baru via Shopee. Tetap kami tampilkan sebagai bukti rekam jejak koleksi preloved berkualitas di toko kami.
+                  </div>
+                </div>
+              )}
+
+              {product.status === 'booked' && (
+                <div className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-950 leading-relaxed">
+                    <strong>Sedang Dalam Proses Booking:</strong> Calon pembeli sedang menyelesaikan transaksi pembayaran. Apabila transaksi batal, status barang akan otomatis kembali tersedia untuk umum.
+                  </div>
+                </div>
+              )}
 
               {/* Price & Original Price */}
               <div className="mt-4 pb-4 border-b border-neutral-200">
@@ -151,11 +182,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 )}
                 <div className="flex items-baseline justify-between">
                   <div>
-                    <span className="text-2xl sm:text-3xl font-extrabold text-neutral-950 tracking-tight">
+                    <span className={`text-2xl sm:text-3xl font-extrabold tracking-tight ${
+                      product.status === 'sold' ? 'text-neutral-500 line-through' : 'text-neutral-950'
+                    }`}>
                       {formatIDR(product.price)}
                     </span>
                     <p className="text-xs text-neutral-600 mt-0.5">
-                      Harga preloved via Shopee (Bisa klaim Gratis Ongkir & Voucher Diskon)
+                      {product.status === 'sold'
+                        ? 'Harga laku terjual via Shopee'
+                        : 'Harga preloved via Shopee (Bisa klaim Gratis Ongkir & Voucher Diskon)'}
                     </p>
                   </div>
                 </div>
@@ -217,16 +252,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             {/* Bottom Actions */}
             <div className="mt-8 pt-5 border-t border-neutral-200 flex flex-col gap-3">
               {/* PRIMARY SHOPEE BUTTON */}
-              <a
-                href={product.shopee_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-4 px-6 rounded-2xl bg-[#EE4D2D] hover:bg-[#D73211] text-white font-extrabold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 active:scale-98"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                <span>Beli di Shopee Sekarang</span>
-                <ExternalLink className="w-4 h-4 ml-1 opacity-80" />
-              </a>
+              {product.status === 'sold' ? (
+                <a
+                  href={product.shopee_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-6 rounded-2xl bg-neutral-800 hover:bg-neutral-900 text-white font-bold text-sm sm:text-base transition-all shadow-xs flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-neutral-400" />
+                  <span>Lihat Riwayat Transaksi di Shopee</span>
+                  <ExternalLink className="w-4 h-4 ml-1 opacity-70" />
+                </a>
+              ) : product.status === 'booked' ? (
+                <div className="w-full py-3.5 px-6 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 font-bold text-sm sm:text-base flex items-center justify-center gap-2">
+                  <span>Sedang Dibooking (Menunggu Pembayaran)</span>
+                </div>
+              ) : (
+                <a
+                  href={product.shopee_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-4 px-6 rounded-2xl bg-[#EE4D2D] hover:bg-[#D73211] text-white font-extrabold text-base transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2.5 active:scale-98"
+                >
+                  <ShoppingBag className="w-5 h-5" />
+                  <span>Beli di Shopee Sekarang</span>
+                  <ExternalLink className="w-4 h-4 ml-1 opacity-80" />
+                </a>
+              )}
 
               {/* Secondary helper actions */}
               <div className="flex items-center gap-2">
@@ -241,13 +293,25 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                 {settings.whatsapp_contact && (
                   <a
-                    href={`https://wa.me/${settings.whatsapp_contact.replace(/[^0-9]/g, '')}?text=Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20tertarik%20dengan%20produk:%20${encodeURIComponent(product.name)}`}
+                    href={`https://wa.me/${settings.whatsapp_contact.replace(/[^0-9]/g, '')}?text=${
+                      product.status === 'sold'
+                        ? `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20lihat%20produk%20"${encodeURIComponent(product.name)}"%20sudah%20terjual.%20Apakah%20akan%20ada%20barang%20serupa%20lagi?`
+                        : product.status === 'booked'
+                          ? `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20ingin%20antre%20jika%20booking%20produk%20"${encodeURIComponent(product.name)}"%20batal.`
+                          : `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20tertarik%20dengan%20produk:%20${encodeURIComponent(product.name)}`
+                    }`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 py-2.5 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Tanya Admin</span>
+                    <span>
+                      {product.status === 'sold'
+                        ? 'Tanya Barang Serupa'
+                        : product.status === 'booked'
+                          ? 'Antre via WA'
+                          : 'Tanya Admin'}
+                    </span>
                   </a>
                 )}
               </div>

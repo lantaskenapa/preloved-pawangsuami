@@ -23,6 +23,7 @@ interface AdminProductTableProps {
   onEdit: (product: Product) => void;
   onDeleteRequest: (product: Product) => void;
   onToggleStatus: (productId: string) => Promise<void>;
+  onUpdateStatus?: (productId: string, status: any) => Promise<void>;
 }
 
 export const AdminProductTable: React.FC<AdminProductTableProps> = ({
@@ -32,10 +33,11 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
   onEdit,
   onDeleteRequest,
   onToggleStatus,
+  onUpdateStatus,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'draft'>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'sold' | 'booked' | 'draft'>('all');
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -92,8 +94,10 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
             className="px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold bg-neutral-50 text-neutral-700"
           >
             <option value="all">Semua Status</option>
-            <option value="published">Published</option>
-            <option value="draft">Draft</option>
+            <option value="published">Tersedia (Ready)</option>
+            <option value="sold">Terjual (Sold Out)</option>
+            <option value="booked">Dibooking (Booked)</option>
+            <option value="draft">Draf (Draft)</option>
           </select>
 
           {/* Add Product Button */}
@@ -184,21 +188,34 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                         )}
                       </td>
 
-                      {/* Status toggle */}
+                      {/* Quick Status Selector */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => onToggleStatus(prod.id)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors ${
-                            isPub
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                        <select
+                          value={prod.status}
+                          onChange={(e) => {
+                            const newStat = e.target.value as any;
+                            if (onUpdateStatus) {
+                              onUpdateStatus(prod.id, newStat);
+                            } else {
+                              onToggleStatus(prod.id);
+                            }
+                          }}
+                          className={`inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
+                            prod.status === 'published'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                              : prod.status === 'sold'
+                                ? 'bg-red-50 text-red-800 border-red-300 hover:bg-red-100'
+                                : prod.status === 'booked'
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                                  : 'bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200'
                           }`}
-                          title="Klik untuk mengubah status Draft/Published"
+                          title="Klik untuk langsung ganti status barang"
                         >
-                          {isPub ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                          <span>{isPub ? 'Published' : 'Draft'}</span>
-                        </button>
+                          <option value="published">🟢 Ready (Tersedia)</option>
+                          <option value="sold">🔴 Terjual (Sold Out)</option>
+                          <option value="booked">🟡 Booked</option>
+                          <option value="draft">⚪ Draf (Draft)</option>
+                        </select>
                       </td>
 
                       {/* Link Shopee */}

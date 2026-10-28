@@ -1,4 +1,4 @@
-import { Category, Product, StoreSettings } from '../types';
+import { Category, Product, ProductStatus, StoreSettings } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_SETTINGS } from './seedData';
 import { getSupabaseClient } from './supabaseClient';
 import { slugify } from './formatters';
@@ -44,6 +44,10 @@ export function initializeStorage() {
             p.original_price = seedMatch.original_price;
             needsUpdate = true;
           }
+          if (seedMatch.status && seedMatch.status !== 'published' && p.status === 'published' && (p.id === 'prod-flannel-heavyweight' || p.id === 'prod-uniqlo-kaws')) {
+            p.status = seedMatch.status;
+            needsUpdate = true;
+          }
         }
         return p;
       });
@@ -71,7 +75,7 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
     try {
       let query = supabase.from('products').select('*').order('created_at', { ascending: false });
       if (!includeDrafts) {
-        query = query.eq('status', 'published');
+        query = query.neq('status', 'draft');
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
@@ -89,10 +93,11 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
     if (includeDrafts) {
       return list;
     }
-    return list.filter(item => item.status === 'published');
+    // Public view shows published, sold, and booked items (only drafts are hidden)
+    return list.filter(item => item.status !== 'draft');
   } catch (err) {
     console.error('Error reading products:', err);
-    return INITIAL_PRODUCTS.filter(p => includeDrafts || p.status === 'published');
+    return INITIAL_PRODUCTS.filter(p => includeDrafts || p.status !== 'draft');
   }
 }
 
@@ -190,9 +195,19 @@ export async function deleteProduct(id: string): Promise<boolean> {
   return true;
 }
 
-export async function toggleProductStatus(id: string): Promise<Product> {
+export async function updateProductStatus(id: string, newStatus: ProductStatus): Promise<Product> {
   const product = await getProductById(id);
   if (!product) throw new Error('Product not found');
+  return saveProduct({ ...product, status: newStatus });
+}
+
+export async function toggleProductStatus(id: string, targetStatus?: ProductStatus): Promise<Product> {
+  const product = await getProductById(id);
+  if (!product) throw new Error('Product not found');
+  if (targetStatus) {
+    return saveProduct({ ...product, status: targetStatus });
+  }
+  // Toggle between published and draft if no specific status provided
   const nextStatus = product.status === 'published' ? 'draft' : 'published';
   return saveProduct({ ...product, status: nextStatus });
 }
