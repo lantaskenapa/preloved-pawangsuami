@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { isSupabaseConnected, testSupabaseConnection, normalizeSupabaseUrl, normalizeSupabaseKey } from '../../lib/supabaseClient';
+import {
+  isSupabaseConnected,
+  testSupabaseConnection,
+  normalizeSupabaseUrl,
+  normalizeSupabaseKey,
+  getPermanentSupabaseConfig,
+  savePermanentSupabaseConfig,
+} from '../../lib/supabaseClient';
 import { syncAllProductsToSupabase } from '../../lib/storage';
 import {
   Save,
@@ -20,6 +27,7 @@ import {
   ExternalLink,
   CloudUpload,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -50,12 +58,13 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [shippingPolicy, setShippingPolicy] = useState(settings.shipping_policy);
   const [returnPolicy, setReturnPolicy] = useState(settings.return_policy);
 
-  // Supabase live configuration credentials
+  // Supabase live & permanent configuration credentials
+  const permanentConfig = getPermanentSupabaseConfig();
   const [supabaseUrl, setSupabaseUrl] = useState(
-    typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_url') || '' : ''
+    (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_url') : '') || permanentConfig.url || ''
   );
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(
-    typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') || '' : ''
+    (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') : '') || permanentConfig.anonKey || ''
   );
 
   const [saving, setSaving] = useState(false);
@@ -80,11 +89,15 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     try {
       localStorage.setItem('psp_supabase_url', cleanUrl);
       localStorage.setItem('psp_supabase_anon_key', cleanKey);
+      
+      // Auto persist permanently to server if valid
+      await savePermanentSupabaseConfig(cleanUrl, cleanKey);
+
       const res = await testSupabaseConnection(cleanUrl, cleanKey);
       setConnectionResult(res);
       setConnectedState(res.success);
       if (res.success) {
-        showToast('Koneksi Supabase berhasil!', 'success');
+        showToast('Koneksi Supabase berhasil & disimpan paten ke server!', 'success');
       } else {
         showToast('Koneksi Supabase gagal. Periksa pesan di bawah.', 'error');
       }
@@ -124,6 +137,12 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     if (cleanKey !== supabaseAnonKey) setSupabaseAnonKey(cleanKey);
 
     try {
+      // 1. Save permanently to server configuration file (src/supabaseConfig.json & .env)
+      if (cleanUrl && cleanKey) {
+        await savePermanentSupabaseConfig(cleanUrl, cleanKey);
+      }
+
+      // 2. Save settings to app storage & Supabase
       await onSave({
         store_name: storeName.trim(),
         tagline: tagline.trim(),
@@ -137,7 +156,7 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         supabase_url: cleanUrl,
         supabase_anon_key: cleanKey,
       });
-      showToast('Informasi toko berhasil disimpan!', 'success');
+      showToast('Pengaturan toko & koneksi Supabase paten berhasil disimpan!', 'success');
     } catch {
       showToast('Gagal menyimpan pengaturan toko', 'error');
     } finally {
@@ -329,8 +348,20 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
             </span>
           </div>
 
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-900">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-blue-700 shrink-0" />
+              <span>
+                <strong>Penyimpanan Paten Aktif:</strong> Kredensial Supabase akan disimpan langsung ke server aplikasi (<code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-blue-200">.env</code> & <code className="font-mono text-[11px] bg-white px-1 py-0.5 rounded border border-blue-200">supabaseConfig.json</code>).
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-blue-700 bg-white px-2 py-0.5 rounded-md border border-blue-200 shrink-0 self-start sm:self-auto">
+              Aman dari Clear Cache
+            </span>
+          </div>
+
           <p className="text-xs text-neutral-500 leading-relaxed">
-            Aplikasi ini terhubung langsung ke Supabase menggunakan REST API klien. <strong>Tidak perlu klik tombol "Connect" di Supabase</strong>. Cukup masukkan <em>Project URL</em> dan <em>Anon Key</em> Anda di bawah, lalu klik <strong>Tes Koneksi</strong>:
+            Aplikasi terhubung langsung ke Supabase. Kredensial yang diisi di bawah akan tersimpan paten di server sehingga katalog dan koneksi database tidak akan pernah hilang walaupun browser dibersihkan (*clear cache*):
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

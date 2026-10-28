@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import bundledConfig from '../supabaseConfig.json';
 
 // Safe environment variable accessor
 const envUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_SUPABASE_URL) || '';
@@ -7,6 +8,32 @@ const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.
 let clientInstance: SupabaseClient | null = null;
 let cachedUrl = '';
 let cachedKey = '';
+
+/**
+ * Persist Supabase configuration permanently to the server files (.env and src/supabaseConfig.json).
+ * This ensures credentials remain intact even when the user clears browser cache or switches devices.
+ */
+export async function savePermanentSupabaseConfig(url: string, anonKey: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/supabase-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, anonKey }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  } catch (e) {
+    console.warn('Could not save permanent config to server:', e);
+    return false;
+  }
+}
+
+export function getPermanentSupabaseConfig(): { url: string; anonKey: string } {
+  return {
+    url: (bundledConfig?.url || envUrl || '').trim(),
+    anonKey: (bundledConfig?.anonKey || envKey || '').trim(),
+  };
+}
 
 /**
  * Normalizes user-input Supabase URLs.
@@ -70,8 +97,22 @@ export function normalizeSupabaseKey(rawKey: string): string {
 }
 
 export function getSupabaseClient(customUrl?: string, customKey?: string): SupabaseClient | null {
-  const rawUrl = customUrl || (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_url') : '') || envUrl || '';
-  const rawKey = customKey || (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') : '') || envKey || '';
+  const localUrl = typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_url') || '' : '';
+  const localKey = typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') || '' : '';
+
+  // Fallback hierarchy: custom -> localStorage -> bundledConfig -> envUrl
+  const rawUrl = customUrl || localUrl || bundledConfig?.url || envUrl || '';
+  const rawKey = customKey || localKey || bundledConfig?.anonKey || envKey || '';
+
+  // Auto restore localStorage if cleared by user
+  if (typeof window !== 'undefined') {
+    if (!localUrl && (bundledConfig?.url || envUrl)) {
+      localStorage.setItem('psp_supabase_url', bundledConfig?.url || envUrl);
+    }
+    if (!localKey && (bundledConfig?.anonKey || envKey)) {
+      localStorage.setItem('psp_supabase_anon_key', bundledConfig?.anonKey || envKey);
+    }
+  }
 
   const url = normalizeSupabaseUrl(rawUrl);
   const key = normalizeSupabaseKey(rawKey);
