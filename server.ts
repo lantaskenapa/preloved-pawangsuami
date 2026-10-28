@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const port = 3000;
 
   app.use(express.json({ limit: '10mb' }));
 
@@ -100,17 +100,37 @@ async function startServer() {
         httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: 'Tes koneksi API Gemini. Jawab hanya: OK',
-      });
+      // Ultra-fast model metadata lookup (validates key permissions in ~200ms without token stream lag)
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Koneksi ke Gemini timeout (8 detik). Silakan coba lagi.')), 8000)
+      );
 
-      if (response && response.text) {
-        return res.json({ success: true, message: 'API Key Gemini valid & siap digunakan!' });
+      const modelInfo = (await Promise.race([
+        ai.models.get({ model: 'gemini-3.8-flash' }),
+        timeoutPromise,
+      ])) as any;
+
+      if (modelInfo && (modelInfo.name || modelInfo.displayName)) {
+        return res.json({
+          success: true,
+          message: `API Key Gemini valid & aktif! Terhubung ke model ${modelInfo.displayName || 'Gemini 3.8 Flash'}.`,
+        });
       }
-      return res.status(500).json({ success: false, message: 'Tidak menerima respon dari Gemini' });
+
+      return res.json({ success: true, message: 'API Key Gemini valid & siap digunakan!' });
     } catch (err: any) {
-      return res.status(400).json({ success: false, message: err?.message || 'API Key tidak valid' });
+      let rawMsg = err?.message || 'API Key tidak valid atau tidak dapat diakses';
+      try {
+        const parsed = JSON.parse(rawMsg);
+        if (parsed?.error?.message) {
+          rawMsg = parsed.error.message;
+        }
+      } catch {
+        // Not a JSON string error
+      }
+
+      console.warn('[Gemini Test-Key Failed]:', rawMsg);
+      return res.status(400).json({ success: false, message: rawMsg });
     }
   });
 

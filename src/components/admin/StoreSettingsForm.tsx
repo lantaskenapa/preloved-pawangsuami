@@ -77,6 +77,20 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [connectedState, setConnectedState] = useState(isSupabaseConnected());
   const [copiedSql, setCopiedSql] = useState(false);
 
+  React.useEffect(() => {
+    fetch('/api/gemini-config')
+      .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
+      .then((data) => {
+        if (data?.configured && !geminiApiKey) {
+          setGeminiTestResult({
+            success: true,
+            message: `API Key Gemini terkonfigurasi di server (${data.apiKey || 'Aktif'}). Siap digunakan untuk Magic Thumbnail.`,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const handleTestGeminiKey = async () => {
     const cleanKey = geminiApiKey.trim();
     if (!cleanKey) {
@@ -91,7 +105,20 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: cleanKey }),
       });
-      const data = await res.json();
+
+      const contentType = res.headers.get('content-type') || '';
+      let data: any;
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(
+          text.includes('<!doctype') || text.includes('<html')
+            ? `Server backend belum merespon (${res.status}). Tunggu 2-3 detik lalu klik tes kembali.`
+            : `Respon server (${res.status}): ${text.slice(0, 100)}`
+        );
+      }
+
       setGeminiTestResult(data);
       if (data.success) {
         showToast('API Key Gemini valid & terhubung!', 'success');
@@ -109,7 +136,7 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         success: false,
         message: err?.message || 'Gagal menghubungi server.',
       });
-      showToast('Gagal menguji API Key Gemini', 'error');
+      showToast(err?.message || 'Gagal menguji API Key Gemini', 'error');
     } finally {
       setTestingGemini(false);
     }
