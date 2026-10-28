@@ -184,9 +184,9 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           </div>
         </div>
 
-        {/* 3. Product Grid */}
+        {/* 3. Product Grid (2 produk per baris di mobile) */}
         {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
             {filteredProducts.map((product) => (
               <ProductCard
                 key={product.id}
