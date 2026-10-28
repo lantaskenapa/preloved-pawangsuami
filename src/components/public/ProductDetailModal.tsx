@@ -242,11 +242,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               )}
 
-              {/* Pengiriman & Lokasi */}
-              <div className="mt-5 pt-4 border-t border-neutral-100 flex items-center gap-3 text-xs text-neutral-500">
-                <Truck className="w-4 h-4 text-neutral-400" />
-                <span>Dikirim dari: <strong>{settings.shipping_origin}</strong> (J&T, SiCepat, SPX, Instant/Sameday)</span>
-              </div>
             </div>
 
             {/* Bottom Actions */}
@@ -280,41 +275,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </a>
               )}
 
-              {/* Secondary helper actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="flex-1 py-2.5 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>Bagikan Produk</span>
-                </button>
-
-                {settings.whatsapp_contact && (
-                  <a
-                    href={`https://wa.me/${settings.whatsapp_contact.replace(/[^0-9]/g, '')}?text=${
-                      product.status === 'sold'
-                        ? `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20lihat%20produk%20"${encodeURIComponent(product.name)}"%20sudah%20terjual.%20Apakah%20akan%20ada%20barang%20serupa%20lagi?`
-                        : product.status === 'booked'
-                          ? `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20ingin%20antre%20jika%20booking%20produk%20"${encodeURIComponent(product.name)}"%20batal.`
-                          : `Halo%20Admin%20Pawang%20Suami%20Preloved,%20saya%20tertarik%20dengan%20produk:%20${encodeURIComponent(product.name)}`
-                    }`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 py-2.5 px-3 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>
-                      {product.status === 'sold'
-                        ? 'Tanya Barang Serupa'
-                        : product.status === 'booked'
-                          ? 'Antre via WA'
-                          : 'Tanya Admin'}
-                    </span>
-                  </a>
-                )}
-              </div>
+              {/* Share button */}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-full py-2.5 px-4 rounded-xl border border-neutral-300 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 flex items-center justify-center gap-2 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>Bagikan Produk</span>
+              </button>
             </div>
           </div>
         </div>

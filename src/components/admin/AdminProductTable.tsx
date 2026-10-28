@@ -77,10 +77,25 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
     );
   };
 
+  const selectedProducts = useMemo(() => {
+    return products.filter((p) => selectedIds.includes(p.id));
+  }, [products, selectedIds]);
+
+  const hasSoldSelected = selectedProducts.some((p) => p.status === 'sold');
+  const hasAvailableSelected = selectedProducts.some((p) => p.status !== 'sold');
+
   const handleBulkMarkAsSold = async () => {
     if (selectedIds.length === 0) return;
     if (onBulkUpdateStatus) {
       await onBulkUpdateStatus(selectedIds, 'sold');
+      setSelectedIds([]);
+    }
+  };
+
+  const handleBulkMarkAsAvailable = async () => {
+    if (selectedIds.length === 0) return;
+    if (onBulkUpdateStatus) {
+      await onBulkUpdateStatus(selectedIds, 'published');
       setSelectedIds([]);
     }
   };
@@ -157,15 +172,29 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Mark as Sold */}
-            <button
-              type="button"
-              onClick={handleBulkMarkAsSold}
-              className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-98"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              <span>Mark as Sold (Tandai Terjual)</span>
-            </button>
+            {/* Mark as Available (Appears when any sold items are checked) */}
+            {hasSoldSelected && (
+              <button
+                type="button"
+                onClick={handleBulkMarkAsAvailable}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-98"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Tandai Tersedia Kembali</span>
+              </button>
+            )}
+
+            {/* Mark as Sold (Appears when any ready items are checked) */}
+            {hasAvailableSelected && (
+              <button
+                type="button"
+                onClick={handleBulkMarkAsSold}
+                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-98"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Mark as Sold (Tandai Terjual)</span>
+              </button>
+            )}
 
             {/* Delete Selected */}
             <button
@@ -302,12 +331,24 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                       {/* Simple Status Badge */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         {isSold ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
-                            Terjual (Sold)
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onUpdateStatus) {
+                                onUpdateStatus(prod.id, 'published');
+                              } else {
+                                onToggleStatus(prod.id);
+                              }
+                            }}
+                            className="group/status inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-red-100 text-red-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 border border-red-300 transition-all cursor-pointer shadow-2xs"
+                            title="Klik untuk mengubah produk ini menjadi Tersedia Kembali"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 group-hover/status:bg-emerald-600 transition-colors"></span>
+                            <span className="group-hover/status:hidden">Terjual (Sold)</span>
+                            <span className="hidden group-hover/status:inline font-bold">Ubah: Tersedia</span>
+                          </button>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
                             Tersedia
                           </span>

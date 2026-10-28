@@ -12,19 +12,13 @@ import { syncAllProductsToSupabase } from '../../lib/storage';
 import {
   Save,
   ShoppingBag,
-  MapPin,
-  Clock,
-  Phone,
-  ShieldAlert,
   Database,
   Download,
   Upload,
   RotateCcw,
-  CheckCircle,
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  ExternalLink,
   CloudUpload,
   Loader2,
   Lock,
@@ -54,11 +48,6 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [tagline, setTagline] = useState(settings.tagline);
   const [bio, setBio] = useState(settings.bio);
   const [shopeeUrl, setShopeeUrl] = useState(settings.shopee_store_url);
-  const [shippingOrigin, setShippingOrigin] = useState(settings.shipping_origin);
-  const [whatsapp, setWhatsapp] = useState(settings.whatsapp_contact || '');
-  const [operationalHours, setOperationalHours] = useState(settings.operational_hours);
-  const [shippingPolicy, setShippingPolicy] = useState(settings.shipping_policy);
-  const [returnPolicy, setReturnPolicy] = useState(settings.return_policy);
 
   // Supabase live & permanent configuration credentials
   const permanentConfig = getPermanentSupabaseConfig();
@@ -151,11 +140,11 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         tagline: tagline.trim(),
         bio: bio.trim(),
         shopee_store_url: shopeeUrl.trim(),
-        shipping_origin: shippingOrigin.trim(),
-        whatsapp_contact: whatsapp.trim(),
-        operational_hours: operationalHours.trim(),
-        shipping_policy: shippingPolicy.trim(),
-        return_policy: returnPolicy.trim(),
+        shipping_origin: settings.shipping_origin || '',
+        whatsapp_contact: settings.whatsapp_contact || '',
+        operational_hours: settings.operational_hours || '',
+        shipping_policy: settings.shipping_policy || '',
+        return_policy: settings.return_policy || '',
         supabase_url: cleanUrl,
         supabase_anon_key: cleanKey,
       });
@@ -252,84 +241,6 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           </div>
         </div>
 
-        {/* Section 2: Operasional & Pengiriman */}
-        <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
-          <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider pb-2 border-b border-neutral-100">
-            Lokasi, Kontak & Kebijakan
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
-                Kota Asal Pengiriman
-              </label>
-              <div className="relative">
-                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  value={shippingOrigin}
-                  onChange={(e) => setShippingOrigin(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
-                Jam Operasional
-              </label>
-              <div className="relative">
-                <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  value={operationalHours}
-                  onChange={(e) => setOperationalHours(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
-                WhatsApp Admin
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="081298765432"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
-              Catatan Pengemasan / Pengiriman
-            </label>
-            <textarea
-              rows={2}
-              value={shippingPolicy}
-              onChange={(e) => setShippingPolicy(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 leading-relaxed"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1">
-              Ketentuan Retur & Garansi Shopee
-            </label>
-            <textarea
-              rows={2}
-              value={returnPolicy}
-              onChange={(e) => setReturnPolicy(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 leading-relaxed"
-            />
-          </div>
-        </div>
 
         {/* Section 3: Supabase Cloud Database Integration */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">

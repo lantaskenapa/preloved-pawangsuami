@@ -11,6 +11,12 @@ import {
   ShoppingBag,
   Loader2,
   Copy,
+  Star,
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -51,6 +57,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
   const [compressionStatus, setCompressionStatus] = useState<string | null>(null);
+  const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
+  const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (productToEdit) {
@@ -149,6 +157,46 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleSetThumbnail = (index: number) => {
+    if (index === 0) return;
+    setImages((prev) => {
+      const copy = [...prev];
+      const [chosen] = copy.splice(index, 1);
+      copy.unshift(chosen);
+      return copy;
+    });
+    showToast('Foto berhasil dijadikan Thumbnail Utama!', 'info');
+  };
+
+  const handleMoveImage = (fromIndex: number, direction: 'left' | 'right') => {
+    const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= images.length) return;
+    setImages((prev) => {
+      const copy = [...prev];
+      const temp = copy[fromIndex];
+      copy[fromIndex] = copy[toIndex];
+      copy[toIndex] = temp;
+      return copy;
+    });
+  };
+
+  const handleDropImage = (toIndex: number) => {
+    if (draggedImageIndex === null || draggedImageIndex === toIndex) {
+      setDraggedImageIndex(null);
+      setDragOverImageIndex(null);
+      return;
+    }
+    setImages((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(draggedImageIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
+    setDraggedImageIndex(null);
+    setDragOverImageIndex(null);
+    showToast(toIndex === 0 ? 'Foto berhasil dijadikan Thumbnail Utama!' : 'Urutan foto diperbarui!', 'info');
+  };
+
   const handleAddCompleteness = () => {
     if (!completenessInput.trim()) return;
     setCompletenessList((prev) => [...prev, completenessInput.trim()]);
@@ -239,6 +287,47 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-8 overflow-y-auto space-y-6">
           
+          {/* Status Alert & Switcher (When Editing Product) */}
+          {productToEdit && (
+            status === 'sold' ? (
+              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-3 h-3 rounded-full bg-red-600 shrink-0 animate-pulse"></span>
+                  <div>
+                    <span className="text-xs font-bold text-red-900 block">Status Produk: TERJUAL (Sold Out)</span>
+                    <span className="text-[11px] text-red-700">Barang saat ini ditandai sudah laku di Shopee</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatus('published')}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Ubah Menjadi Tersedia Kembali</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0"></span>
+                  <div>
+                    <span className="text-xs font-bold text-emerald-900 block">Status Produk: TERSEDIA (Ready)</span>
+                    <span className="text-[11px] text-emerald-700">Barang aktif dan siap dibeli di Shopee</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStatus('sold')}
+                  className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 active:scale-98 cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Tandai Sebagai Terjual</span>
+                </button>
+              </div>
+            )
+          )}
+
           {/* Template Product Selector (Only in Add mode) */}
           {!productToEdit && existingProducts && existingProducts.length > 0 && (
             <div className="p-3.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
@@ -436,32 +525,145 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               </button>
             </div>
 
-            {/* Rendered Image Thumbnails Grid */}
+            {/* Rendered Image Thumbnails Grid with Drag & Drop & Thumbnail selector */}
             {images.length > 0 ? (
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 pt-2">
-                {images.map((img, index) => (
-                  <div key={index} className="relative group rounded-xl overflow-hidden aspect-square border border-neutral-200 bg-white shadow-2xs">
-                    <img src={img} alt={`foto ${index + 1}`} className="w-full h-full object-cover" />
-                    {index === 0 && (
-                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded-md bg-neutral-900/80 text-white text-[9px] font-bold">
-                        Sampul
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(index)}
-                      className="absolute top-1 right-1 p-1 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow-sm opacity-90 group-hover:opacity-100 transition-opacity"
-                      title="Hapus foto ini"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+              <div className="space-y-2 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-neutral-500 font-medium gap-1 bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
+                  <span className="flex items-center gap-1.5 text-neutral-700">
+                    <GripVertical className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <span><strong>Geser / Drag</strong> kartu foto untuk atur urutan. Foto urutan pertama otomatis jadi <strong>Thumbnail Utama</strong>.</span>
+                  </span>
+                  <span className="shrink-0 font-bold text-neutral-600">{images.length} foto terpilih</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                  {images.map((img, index) => {
+                    const isThumbnail = index === 0;
+                    const isDragging = draggedImageIndex === index;
+                    const isDragOver = dragOverImageIndex === index;
+
+                    return (
+                      <div
+                        key={index}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedImageIndex(index);
+                          e.dataTransfer.setData('text/plain', String(index));
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          if (dragOverImageIndex !== index) {
+                            setDragOverImageIndex(index);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          setDragOverImageIndex(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDropImage(index);
+                        }}
+                        className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-neutral-100 shadow-2xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                          isThumbnail
+                            ? 'border-neutral-900 ring-2 ring-neutral-900/10'
+                            : isDragOver
+                              ? 'border-blue-500 scale-105'
+                              : 'border-neutral-200 hover:border-neutral-400'
+                        } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
+                      >
+                        <img
+                          src={img}
+                          alt={`foto ${index + 1}`}
+                          className="w-full h-full object-cover pointer-events-none"
+                        />
+
+                        {/* Top Badges */}
+                        <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none z-10">
+                          {isThumbnail ? (
+                            <span className="px-2 py-0.5 rounded-lg bg-neutral-950/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/20 backdrop-blur-xs">
+                              <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                              <span>Thumbnail</span>
+                            </span>
+                          ) : (
+                            <span className="w-5 h-5 rounded-md bg-neutral-900/70 text-white text-[10px] font-bold flex items-center justify-center backdrop-blur-xs">
+                              {index + 1}
+                            </span>
+                          )}
+
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveImage(index);
+                            }}
+                            className="p-1 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow-sm pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Hapus foto ini"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Bottom Actions: Quick Reorder / Set as Thumbnail */}
+                        <div className="absolute bottom-1.5 inset-x-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                          {/* Move Left Button */}
+                          {index > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveImage(index, 'left');
+                              }}
+                              className="p-1 rounded-md bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer"
+                              title="Pindahkan ke kiri"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                          )}
+
+                          {/* Set as Thumbnail Button */}
+                          {!isThumbnail ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSetThumbnail(index);
+                              }}
+                              className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
+                              title="Jadikan foto ini Thumbnail Utama"
+                            >
+                              <Star className="w-2.5 h-2.5 text-amber-400" />
+                              <span className="truncate">Jadikan Sampul</span>
+                            </button>
+                          ) : (
+                            <div className="flex-1"></div>
+                          )}
+
+                          {/* Move Right Button */}
+                          {index < images.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveImage(index, 'right');
+                              }}
+                              className="p-1 rounded-md bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer"
+                              title="Pindahkan ke kanan"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="p-6 text-center border-2 border-dashed border-neutral-200 rounded-xl bg-white">
                 <ImageIcon className="w-8 h-8 text-neutral-300 mx-auto mb-1" />
-                <p className="text-xs text-neutral-500">Belum ada foto yang dipilih. Unggah foto atau pilih salah satu preset di atas.</p>
+                <p className="text-xs text-neutral-500">Belum ada foto yang dipilih. Unggah foto atau tempel URL gambar di atas.</p>
               </div>
             )}
           </div>
