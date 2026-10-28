@@ -264,10 +264,31 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
         updated_at: savedProduct.updated_at,
       };
 
-      const { error } = await supabase.from('products').upsert(supabasePayload);
-      if (error) {
-        console.error('Supabase product upsert error:', error);
-        throw new Error(`Supabase: ${error.message} (${error.hint || error.details || 'Cek tabel products'})`);
+      // Try upserting, automatically handling missing optional columns in Supabase schema cache
+      let currentPayload: any = { ...supabasePayload };
+      let upsertError: any = null;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { error } = await supabase.from('products').upsert(currentPayload);
+        if (!error) {
+          upsertError = null;
+          break;
+        }
+
+        upsertError = error;
+        // Detect missing column error from PostgREST schema cache
+        const match = error.message && error.message.match(/Could not find the '([a-zA-Z0-9_]+)' column/);
+        if (match && match[1] && match[1] in currentPayload) {
+          console.warn(`Column '${match[1]}' does not exist in Supabase products table. Retrying upsert without it...`);
+          delete currentPayload[match[1]];
+        } else {
+          break;
+        }
+      }
+
+      if (upsertError) {
+        console.error('Supabase product upsert error:', upsertError);
+        throw new Error(`Supabase: ${upsertError.message} (${upsertError.hint || upsertError.details || 'Cek tabel products'})`);
       }
     } catch (e: any) {
       console.error('Could not sync product to Supabase:', e);
@@ -290,7 +311,7 @@ export async function syncAllProductsToSupabase(): Promise<{ success: boolean; c
   const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
 
   try {
-    const formattedPayloads = currentList.map((p) => ({
+    let formattedPayloads = currentList.map((p) => ({
       id: p.id,
       name: p.name,
       slug: p.slug || slugify(p.name),
@@ -311,9 +332,31 @@ export async function syncAllProductsToSupabase(): Promise<{ success: boolean; c
       updated_at: p.updated_at || new Date().toISOString(),
     }));
 
-    const { error } = await supabase.from('products').upsert(formattedPayloads);
-    if (error) {
-      return { success: false, count: 0, error: `${error.message} (${error.hint || error.details || ''})` };
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { error } = await supabase.from('products').upsert(formattedPayloads);
+      if (!error) {
+        lastError = null;
+        break;
+      }
+
+      lastError = error;
+      const match = error.message && error.message.match(/Could not find the '([a-zA-Z0-9_]+)' column/);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        console.warn(`Column '${missingCol}' missing during bulk sync. Retrying without it...`);
+        formattedPayloads = formattedPayloads.map((item) => {
+          const copy: any = { ...item };
+          delete copy[missingCol];
+          return copy;
+        });
+      } else {
+        break;
+      }
+    }
+
+    if (lastError) {
+      return { success: false, count: 0, error: `${lastError.message} (${lastError.hint || lastError.details || ''})` };
     }
     return { success: true, count: formattedPayloads.length };
   } catch (err: any) {

@@ -143,3 +143,17 @@ VALUES (
     'Garansi pengembalian 100% mengikuti syarat dan ketentuan Garansi Shopee jika barang yang diterima tidak sesuai dengan deskripsi/foto.'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- =========================================================================
+-- SAFE COLUMN MIGRATIONS (Untuk Database yang Sudah Terlanjur Dibuat)
+-- =========================================================================
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS original_price BIGINT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS story TEXT;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS completeness JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS weight_grams INT DEFAULT 500;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published';
+
+-- Muat ulang schema cache PostgREST Supabase
+NOTIFY pgrst, 'reload schema';
