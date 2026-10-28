@@ -1,0 +1,6 @@
+{
+  "name": "Pawang Suami Preloved - Barang Lama, Cerita Baru",
+  "description": "Katalog barang pribadi preloved berkualitas: Games, Shirts, Electronics, Accessories, Gadgets, dan koleksi lainnya. Belanja aman via Shopee.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
