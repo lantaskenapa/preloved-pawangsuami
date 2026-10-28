@@ -1,20 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { Category, Product } from '../../types';
+import { Category, Product, ProductStatus } from '../../types';
 import { formatIDR } from '../../lib/formatters';
 import {
   Search,
-  Filter,
   Plus,
   Edit2,
   Trash2,
   ExternalLink,
-  Eye,
-  EyeOff,
   ShoppingBag,
-  Sparkles,
   CheckCircle2,
-  Clock,
+  XCircle,
+  CheckSquare,
+  Square,
+  AlertTriangle,
 } from 'lucide-react';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface AdminProductTableProps {
   products: Product[];
@@ -23,7 +23,9 @@ interface AdminProductTableProps {
   onEdit: (product: Product) => void;
   onDeleteRequest: (product: Product) => void;
   onToggleStatus: (productId: string) => Promise<void>;
-  onUpdateStatus?: (productId: string, status: any) => Promise<void>;
+  onUpdateStatus?: (productId: string, status: ProductStatus) => Promise<void>;
+  onBulkUpdateStatus?: (productIds: string[], status: ProductStatus) => Promise<void>;
+  onBulkDelete?: (productIds: string[]) => Promise<void>;
 }
 
 export const AdminProductTable: React.FC<AdminProductTableProps> = ({
@@ -34,15 +36,19 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
   onDeleteRequest,
   onToggleStatus,
   onUpdateStatus,
+  onBulkUpdateStatus,
+  onBulkDelete,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'sold' | 'booked' | 'draft'>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showConfirmBulkDelete, setShowConfirmBulkDelete] = useState(false);
 
+  // Filter products by category and search only (status ready/draft filter removed as requested)
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
       if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
-      if (selectedStatus !== 'all' && p.status !== selectedStatus) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = p.name.toLowerCase().includes(q);
@@ -52,10 +58,49 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
       }
       return true;
     });
-  }, [products, selectedCategory, selectedStatus, searchQuery]);
+  }, [products, selectedCategory, searchQuery]);
+
+  // Checklist helpers
+  const isAllSelected = filteredProducts.length > 0 && selectedIds.length === filteredProducts.length;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredProducts.map((p) => p.id));
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkMarkAsSold = async () => {
+    if (selectedIds.length === 0) return;
+    if (onBulkUpdateStatus) {
+      await onBulkUpdateStatus(selectedIds, 'sold');
+      setSelectedIds([]);
+    }
+  };
+
+  const handleExecuteBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      if (onBulkDelete) {
+        await onBulkDelete(selectedIds);
+        setSelectedIds([]);
+      }
+    } finally {
+      setIsBulkDeleting(false);
+      setShowConfirmBulkDelete(false);
+    }
+  };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Table Toolbar Header */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200/90 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         
@@ -71,13 +116,13 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
           />
         </div>
 
-        {/* Filters */}
+        {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Category Filter */}
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold bg-neutral-50 text-neutral-700"
+            className="px-3.5 py-2 rounded-xl border border-neutral-200 text-xs font-semibold bg-neutral-50 text-neutral-700 focus:outline-hidden focus:border-neutral-900 cursor-pointer"
           >
             <option value="all">Semua Kategori</option>
             {categories.map((c) => (
@@ -85,19 +130,6 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                 {c.name}
               </option>
             ))}
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value as any)}
-            className="px-3 py-2 rounded-xl border border-neutral-200 text-xs font-semibold bg-neutral-50 text-neutral-700"
-          >
-            <option value="all">Semua Status</option>
-            <option value="published">Tersedia (Ready)</option>
-            <option value="sold">Terjual (Sold Out)</option>
-            <option value="booked">Dibooking (Booked)</option>
-            <option value="draft">Draf (Draft)</option>
           </select>
 
           {/* Add Product Button */}
@@ -112,12 +144,67 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
 
       </div>
 
+      {/* Floating Bulk Actions Bar (Checklist Options) */}
+      {selectedIds.length > 0 && (
+        <div className="bg-neutral-900 text-white p-3 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg border border-neutral-800 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center text-xs font-bold">
+              {selectedIds.length}
+            </span>
+            <span className="text-xs font-bold text-white">
+              {selectedIds.length} produk dipilih dari checklist
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Mark as Sold */}
+            <button
+              type="button"
+              onClick={handleBulkMarkAsSold}
+              className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-98"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>Mark as Sold (Tandai Terjual)</span>
+            </button>
+
+            {/* Delete Selected */}
+            <button
+              type="button"
+              onClick={() => setShowConfirmBulkDelete(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-red-900/60 text-white text-xs font-bold transition-all border border-white/20 flex items-center gap-1.5 active:scale-98"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+              <span>Delete (Hapus)</span>
+            </button>
+
+            {/* Cancel Selection */}
+            <button
+              type="button"
+              onClick={() => setSelectedIds([])}
+              className="px-3 py-1.5 rounded-xl text-neutral-400 hover:text-white text-xs font-medium transition-colors"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Table Container */}
       <div className="bg-white rounded-2xl border border-neutral-200/90 shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs sm:text-sm">
             <thead>
               <tr className="bg-neutral-50/80 border-b border-neutral-200 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
+                {/* Select All Checkbox */}
+                <th className="py-3.5 px-4 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    aria-label="Pilih semua produk"
+                    className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer"
+                  />
+                </th>
                 <th className="py-3.5 px-4">Barang</th>
                 <th className="py-3.5 px-4">Kategori</th>
                 <th className="py-3.5 px-4">Kondisi</th>
@@ -131,10 +218,25 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
               {filteredProducts.length > 0 ? (
                 filteredProducts.map((prod) => {
                   const img = prod.images && prod.images.length > 0 ? prod.images[0] : null;
-                  const isPub = prod.status === 'published';
+                  const isSold = prod.status === 'sold';
+                  const isChecked = selectedIds.includes(prod.id);
 
                   return (
-                    <tr key={prod.id} className="hover:bg-neutral-50/60 transition-colors">
+                    <tr 
+                      key={prod.id} 
+                      className={`hover:bg-neutral-50/70 transition-colors ${isChecked ? 'bg-neutral-50/90' : ''}`}
+                    >
+                      {/* Row Checkbox */}
+                      <td className="py-3 px-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleSelectOne(prod.id)}
+                          aria-label={`Pilih ${prod.name}`}
+                          className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer"
+                        />
+                      </td>
+
                       {/* Product Name & Photo */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
@@ -148,9 +250,16 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                             )}
                           </div>
                           <div className="max-w-xs">
-                            <span className="font-bold text-neutral-900 block line-clamp-1">
-                              {prod.name}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`font-bold block line-clamp-1 ${isSold ? 'line-through text-neutral-400' : 'text-neutral-900'}`}>
+                                {prod.name}
+                              </span>
+                              {isSold && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-red-600 text-white tracking-wider uppercase shrink-0 shadow-2xs">
+                                  TERJUAL
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -162,13 +271,13 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                         </span>
                       </td>
 
-                      {/* Condition & Minus */}
+                      {/* Condition & Minus Points */}
                       <td className="py-3 px-4">
                         <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200">
                           {prod.condition}
                         </span>
                         {prod.minus_points && prod.minus_points.length > 0 ? (
-                          <span className="block text-[10px] text-amber-700 font-medium mt-1">
+                          <span className="block text-[10px] text-red-600 font-semibold mt-1">
                             {prod.minus_points.length} minus tercatat
                           </span>
                         ) : (
@@ -180,7 +289,9 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
 
                       {/* Price & Original Price */}
                       <td className="py-3 px-4 font-mono font-bold text-neutral-900 whitespace-nowrap">
-                        <div>{formatIDR(prod.price)}</div>
+                        <div className={isSold ? 'line-through text-neutral-400' : ''}>
+                          {formatIDR(prod.price)}
+                        </div>
                         {prod.original_price && prod.original_price > prod.price && (
                           <div className="text-[10px] text-neutral-400 line-through font-normal">
                             Baru: {formatIDR(prod.original_price)}
@@ -188,34 +299,19 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                         )}
                       </td>
 
-                      {/* Quick Status Selector */}
+                      {/* Simple Status Badge */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <select
-                          value={prod.status}
-                          onChange={(e) => {
-                            const newStat = e.target.value as any;
-                            if (onUpdateStatus) {
-                              onUpdateStatus(prod.id, newStat);
-                            } else {
-                              onToggleStatus(prod.id);
-                            }
-                          }}
-                          className={`inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${
-                            prod.status === 'published'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                              : prod.status === 'sold'
-                                ? 'bg-red-50 text-red-800 border-red-300 hover:bg-red-100'
-                                : prod.status === 'booked'
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                                  : 'bg-neutral-100 text-neutral-700 border-neutral-300 hover:bg-neutral-200'
-                          }`}
-                          title="Klik untuk langsung ganti status barang"
-                        >
-                          <option value="published">🟢 Ready (Tersedia)</option>
-                          <option value="sold">🔴 Terjual (Sold Out)</option>
-                          <option value="booked">🟡 Booked</option>
-                          <option value="draft">⚪ Draf (Draft)</option>
-                        </select>
+                        {isSold ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                            Terjual (Sold)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                            Tersedia
+                          </span>
+                        )}
                       </td>
 
                       {/* Link Shopee */}
@@ -227,29 +323,32 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                           className="inline-flex items-center gap-1 text-xs font-semibold text-[#EE4D2D] hover:underline"
                         >
                           <ShoppingBag className="w-3.5 h-3.5" />
-                          <span>Buka Shopee</span>
+                          <span>Shopee</span>
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </td>
 
                       {/* Actions */}
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
+                          {/* Edit Button */}
                           <button
                             type="button"
                             onClick={() => onEdit(prod)}
                             className="p-1.5 rounded-lg text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
                             title="Edit Produk"
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* Delete Button */}
                           <button
                             type="button"
                             onClick={() => onDeleteRequest(prod)}
                             className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                             title="Hapus Produk"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -258,7 +357,7 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-neutral-400">
+                  <td colSpan={8} className="py-12 text-center text-neutral-400">
                     Tidak ada produk yang sesuai dengan filter pencarian.
                   </td>
                 </tr>
@@ -270,11 +369,21 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
         {/* Table Subfooter */}
         <div className="p-4 border-t border-neutral-100 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-2">
           <span>Menampilkan {filteredProducts.length} dari {products.length} total produk</span>
-          <span className="text-[11px] italic">
-            Tips: Klik tombol status untuk langsung beralih antara <strong>Published</strong> dan <strong>Draft</strong>.
+          <span className="text-[11px]">
+            Gunakan checklist di samping produk untuk <strong>Mark as Sold</strong> atau <strong>Delete</strong> massal.
           </span>
         </div>
       </div>
+
+      {/* Bulk Delete Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showConfirmBulkDelete}
+        title="Hapus Produk Terpilih?"
+        message={`Apakah Anda yakin ingin menghapus ${selectedIds.length} produk yang dipilih secara permanen? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel={isBulkDeleting ? 'Menghapus...' : `Ya, Hapus ${selectedIds.length} Produk`}
+        onConfirm={handleExecuteBulkDelete}
+        onCancel={() => setShowConfirmBulkDelete(false)}
+      />
     </div>
   );
 };

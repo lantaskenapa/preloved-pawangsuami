@@ -123,6 +123,15 @@ export function initializeStorage() {
 
 export async function getProducts(includeDrafts = false): Promise<Product[]> {
   initializeStorage();
+
+  // Read local products first
+  let localList: Product[] = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+    localList = raw ? JSON.parse(raw) : INITIAL_PRODUCTS;
+  } catch {
+    localList = INITIAL_PRODUCTS;
+  }
   
   // Try Supabase first if available
   const supabase = getSupabaseClient();
@@ -134,7 +143,27 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        return data as Product[];
+        let dbProducts = data as Product[];
+
+        // Sync protection: If a product was marked 'sold' locally,
+        // but Supabase rejected update due to check constraint products_status_check,
+        // preserve the user's 'sold' status so it DOES NOT revert to 'published'!
+        if (localList.length > 0) {
+          const localSoldSet = new Set(
+            localList.filter((p) => p.status === 'sold').map((p) => p.id)
+          );
+          if (localSoldSet.size > 0) {
+            dbProducts = dbProducts.map((p) => {
+              if (localSoldSet.has(p.id)) {
+                return { ...p, status: 'sold' };
+              }
+              return p;
+            });
+          }
+        }
+
+        safeSaveProductsToLocalStorage(dbProducts);
+        return dbProducts;
       }
     } catch (e) {
       console.warn('Falling back to local storage products:', e);
@@ -369,7 +398,7 @@ export async function deleteProduct(id: string): Promise<boolean> {
   const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
   const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
   const filtered = currentList.filter(p => p.id !== id);
-  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(filtered));
+  safeSaveProductsToLocalStorage(filtered);
 
   const supabase = getSupabaseClient();
   if (supabase) {
@@ -377,6 +406,64 @@ export async function deleteProduct(id: string): Promise<boolean> {
       await supabase.from('products').delete().eq('id', id);
     } catch (e) {
       console.warn('Supabase delete error:', e);
+    }
+  }
+
+  notifyChange();
+  return true;
+}
+
+export async function bulkDeleteProducts(ids: string[]): Promise<boolean> {
+  if (ids.length === 0) return true;
+  initializeStorage();
+  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+  const filtered = currentList.filter(p => !ids.includes(p.id));
+  safeSaveProductsToLocalStorage(filtered);
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('products').delete().in('id', ids);
+    } catch (e) {
+      console.warn('Supabase bulk delete error:', e);
+    }
+  }
+
+  notifyChange();
+  return true;
+}
+
+export async function bulkUpdateProductStatus(ids: string[], newStatus: ProductStatus): Promise<boolean> {
+  if (ids.length === 0) return true;
+  initializeStorage();
+  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+  const now = new Date().toISOString();
+
+  const updated = currentList.map((p) => {
+    if (ids.includes(p.id)) {
+      return { ...p, status: newStatus, updated_at: now };
+    }
+    return p;
+  });
+  safeSaveProductsToLocalStorage(updated);
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase.from('products').update({ status: newStatus, updated_at: now }).in('id', ids);
+      if (error) {
+        console.warn('Supabase bulk status update error:', error);
+        if (error.code === '23514' || (error.message && error.message.includes('products_status_check'))) {
+          throw new Error('SUPABASE_STATUS_CHECK_CONSTRAINT');
+        }
+      }
+    } catch (e: any) {
+      if (e?.message === 'SUPABASE_STATUS_CHECK_CONSTRAINT' || e?.code === '23514') {
+        throw e;
+      }
+      console.warn('Supabase bulk status update error:', e);
     }
   }
 
@@ -396,8 +483,8 @@ export async function toggleProductStatus(id: string, targetStatus?: ProductStat
   if (targetStatus) {
     return saveProduct({ ...product, status: targetStatus });
   }
-  // Toggle between published and draft if no specific status provided
-  const nextStatus = product.status === 'published' ? 'draft' : 'published';
+  // Toggle between published and sold if no specific status provided
+  const nextStatus = product.status === 'sold' ? 'published' : 'sold';
   return saveProduct({ ...product, status: nextStatus });
 }
 

@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   ShoppingBag,
   Loader2,
+  Copy,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -17,27 +18,16 @@ interface ProductFormModalProps {
   isOpen: boolean;
   productToEdit: Product | null;
   categories: Category[];
+  existingProducts?: Product[];
   onClose: () => void;
   onSave: (productData: Partial<Product> & { name: string; price: number; category: string }) => Promise<void>;
 }
-
-// Preset photo options for quick testing
-const PRESET_PHOTOS = [
-  { name: 'Nintendo Switch', url: 'https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'DualSense PS5', url: 'https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Headphone Audio', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'iPad / Tablet', url: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Mechanical Keyboard', url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Jam Tangan Seiko', url: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Kaos Graphic Tee', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Flannel Shirt', url: 'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=1000&q=80' },
-  { name: 'Lego Car', url: 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=1000&q=80' },
-];
 
 export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   isOpen,
   productToEdit,
   categories,
+  existingProducts = [],
   onClose,
   onSave,
 }) => {
@@ -134,10 +124,25 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setCustomImageUrl('');
   };
 
-  const handleAddPresetPhoto = (url: string) => {
-    if (!images.includes(url)) {
-      setImages((prev) => [...prev, url]);
+  const handleCopyFromTemplate = (templateId: string) => {
+    if (!templateId || !existingProducts) return;
+    const target = existingProducts.find((p) => p.id === templateId);
+    if (!target) return;
+
+    setName(target.name);
+    setPriceInput(target.price.toString());
+    setOriginalPriceInput(target.original_price ? target.original_price.toString() : '');
+    setCategory(target.category);
+    setCondition(target.condition);
+    setDescription(target.description);
+    setShopeeUrl(target.shopee_url);
+    setCompletenessList([...(target.completeness || [])]);
+    setMinusPointsList([...(target.minus_points || [])]);
+    setIsFeatured(!!target.is_featured);
+    if (target.images && target.images.length > 0) {
+      setImages([...target.images]);
     }
+    showToast(`Data produk berhasil disalin dari "${target.name}"!`, 'info');
   };
 
   const handleRemoveImage = (index: number) => {
@@ -234,45 +239,54 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-8 overflow-y-auto space-y-6">
           
-          {/* Row 1: Name & Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                Nama Produk *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Contoh: Nintendo Switch OLED White - Mario Edition"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-hidden focus:border-neutral-900"
-              />
-            </div>
+          {/* Template Product Selector (Only in Add mode) */}
+          {!productToEdit && existingProducts && existingProducts.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-neutral-100/90 border border-neutral-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white border border-neutral-200 flex items-center justify-center text-neutral-800 shrink-0">
+                  <Copy className="w-4 h-4 text-neutral-700" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-neutral-900 block">
+                    Copy dari Template Produk
+                  </span>
+                  <span className="text-[11px] text-neutral-500">
+                    Gunakan deskripsi, kategori, & kelengkapan produk yang sudah dibuat
+                  </span>
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
-                Status Publikasi
-              </label>
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ProductStatus)}
-                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-semibold focus:outline-hidden ${
-                  status === 'published'
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                    : status === 'sold'
-                      ? 'border-red-300 bg-red-50 text-red-800'
-                      : status === 'booked'
-                        ? 'border-amber-300 bg-amber-50 text-amber-800'
-                        : 'border-neutral-300 bg-neutral-100 text-neutral-800'
-                }`}
+                defaultValue=""
+                onChange={(e) => {
+                  handleCopyFromTemplate(e.target.value);
+                  e.target.value = '';
+                }}
+                className="px-3.5 py-2 rounded-xl border border-neutral-300 text-xs font-semibold bg-white text-neutral-800 focus:outline-hidden focus:border-neutral-900 shadow-2xs cursor-pointer"
               >
-                <option value="published">Tersedia (Published - Siap Jual)</option>
-                <option value="sold">Terjual (Sold Out - Laku)</option>
-                <option value="booked">Dibooking (Booked - Menunggu Bayar)</option>
-                <option value="draft">Draf (Draft - Hanya Admin)</option>
+                <option value="" disabled>-- Pilih Template Produk --</option>
+                {existingProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({formatIDR(p.price)})
+                  </option>
+                ))}
               </select>
             </div>
+          )}
+
+          {/* Row 1: Name */}
+          <div>
+            <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider mb-1.5">
+              Nama Produk *
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Contoh: Nintendo Switch OLED White - Mario Edition"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-hidden focus:border-neutral-900"
+            />
           </div>
 
           {/* Row 2: Price & Original Price & Category & Condition */}
@@ -422,26 +436,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               </button>
             </div>
 
-            {/* Quick Presets Picker */}
-            <div>
-              <span className="text-[11px] font-bold text-neutral-600 uppercase tracking-wider block mb-2">
-                Pilihan Foto Sampel Cepat:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {PRESET_PHOTOS.map((preset, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleAddPresetPhoto(preset.url)}
-                    className="px-2.5 py-1 rounded-lg bg-white border border-neutral-200 text-[11px] text-neutral-700 hover:bg-neutral-100 hover:border-neutral-300 transition-colors flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3 text-neutral-500" />
-                    <span>{preset.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Rendered Image Thumbnails Grid */}
             {images.length > 0 ? (
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 pt-2">
@@ -537,17 +531,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           </div>
 
           {/* Row: Poin-Poin Minus Barang */}
-          <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-amber-950 uppercase tracking-wider mb-1">
-                Poin-Poin Minus / Catatan Fisik Barang
-              </label>
-              <p className="text-[11px] text-amber-800 mb-2">
-                Poin minus ini akan langsung terlihat di kartu katalog produk dan detail produk agar pembeli mendapatkan info jujur dan transparan.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
+          <div>
+            <label className="block text-xs font-bold text-red-600 uppercase tracking-wider mb-1.5">
+              Poin-Poin Minus Barang
+            </label>
+            <div className="flex items-center gap-2 mb-2">
               <input
                 type="text"
                 value={minusPointInput}
@@ -559,29 +547,29 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   }
                 }}
                 placeholder="Contoh: Baret halus di sudut bawah, Dus sedikit penyok"
-                className="flex-1 px-3 py-2 rounded-xl border border-amber-300 text-xs text-neutral-900 bg-white"
+                className="flex-1 px-3 py-2 rounded-xl border border-red-300 bg-red-50/20 text-xs text-neutral-900 focus:outline-hidden focus:border-red-500"
               />
               <button
                 type="button"
                 onClick={handleAddMinusPoint}
-                className="px-3.5 py-2 rounded-xl bg-amber-900 hover:bg-amber-950 text-white text-xs font-semibold"
+                className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors"
               >
-                Tambah Minus
+                Tambah
               </button>
             </div>
 
-            {minusPointsList.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+            {minusPointsList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
                 {minusPointsList.map((item, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white text-amber-950 text-xs font-medium border border-amber-200 shadow-2xs"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-50 text-red-700 text-xs font-medium border border-red-200"
                   >
                     <span>• {item}</span>
                     <button
                       type="button"
                       onClick={() => handleRemoveMinusPoint(idx)}
-                      className="text-amber-500 hover:text-red-600"
+                      className="text-red-400 hover:text-red-700"
                       title="Hapus poin minus"
                     >
                       <X className="w-3 h-3" />
@@ -589,10 +577,6 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   </span>
                 ))}
               </div>
-            ) : (
-              <p className="text-[11px] text-amber-700 italic">
-                Belum ada poin minus ditambahkan (Barang akan ditandai mulus tanpa minus).
-              </p>
             )}
           </div>
 

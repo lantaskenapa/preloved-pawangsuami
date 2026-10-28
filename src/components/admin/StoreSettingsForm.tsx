@@ -28,6 +28,8 @@ import {
   CloudUpload,
   Loader2,
   Lock,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -72,6 +74,7 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [connectionResult, setConnectionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [connectedState, setConnectedState] = useState(isSupabaseConnected());
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const handleTestConnection = async () => {
     const cleanUrl = normalizeSupabaseUrl(supabaseUrl);
@@ -457,6 +460,36 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
               </div>
             </div>
           )}
+
+          {/* SQL Fix Helper for Mark as Sold & Minus Points */}
+          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/60 text-xs text-amber-950 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-bold flex items-center gap-1.5 text-amber-900">
+                <span>⚡ Perintah SQL Supabase (Penting untuk Status Terjual & Poin Minus)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const sql = `ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;\nALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;`;
+                  navigator.clipboard.writeText(sql);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 2500);
+                  showToast('Perintah SQL berhasil disalin ke clipboard!', 'success');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-900 text-[11px] font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
+              >
+                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-700" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSql ? 'Tersalin!' : 'Salin Perintah SQL'}</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-normal">
+              Jika tombol <em>Mark as Sold (Tandai Terjual)</em> atau penyimpanan minus poin di Supabase memerlukan izin, buka <strong>Supabase Dashboard &gt; SQL Editor</strong> lalu jalankan 2 baris perintah ini:
+            </p>
+            <pre className="p-2 rounded-lg bg-neutral-900 text-neutral-100 font-mono text-[11px] overflow-x-auto select-all">
+ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;
+            </pre>
+          </div>
         </div>
 
         {/* Submit Button */}

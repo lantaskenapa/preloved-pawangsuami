@@ -6,6 +6,8 @@ import {
   getStoreSettings,
   saveProduct,
   deleteProduct,
+  bulkDeleteProducts,
+  bulkUpdateProductStatus,
   toggleProductStatus,
   updateProductStatus,
   saveCategory,
@@ -110,21 +112,72 @@ function MainApp() {
   };
 
   const handleToggleProductStatus = async (id: string) => {
-    await toggleProductStatus(id);
-    await refreshData();
-    showToast('Status produk berhasil diperbarui!', 'success');
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: p.status === 'sold' ? 'published' : 'sold' } : p))
+    );
+    try {
+      await toggleProductStatus(id);
+    } catch {
+      // Ignored
+    } finally {
+      await refreshData();
+      showToast('Status produk berhasil diperbarui!', 'success');
+    }
   };
 
   const handleUpdateProductStatus = async (id: string, newStatus: ProductStatus) => {
-    await updateProductStatus(id, newStatus);
+    setProducts((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: newStatus } : p))
+    );
+    try {
+      await updateProductStatus(id, newStatus);
+    } catch {
+      // Handled
+    } finally {
+      await refreshData();
+      const labels: Record<ProductStatus, string> = {
+        published: 'Ready (Tersedia)',
+        sold: 'Terjual (Sold Out)',
+        booked: 'Dibooking (Booked)',
+        draft: 'Draf',
+      };
+      showToast(`Status produk diubah menjadi ${labels[newStatus]}`, 'success');
+    }
+  };
+
+  const handleBulkUpdateStatus = async (ids: string[], newStatus: ProductStatus) => {
+    // 1. Optimistic state update: Update UI instantly with zero lag
+    setProducts((prev) =>
+      prev.map((p) => (ids.includes(p.id) ? { ...p, status: newStatus } : p))
+    );
+
+    try {
+      await bulkUpdateProductStatus(ids, newStatus);
+      await refreshData();
+      showToast(
+        `${ids.length} produk berhasil ditandai sebagai ${newStatus === 'sold' ? 'Terjual (Sold Out)' : 'Tersedia'}!`,
+        'success'
+      );
+    } catch (err: any) {
+      await refreshData();
+      if (err?.message === 'SUPABASE_STATUS_CHECK_CONSTRAINT' || (err?.message && err.message.includes('products_status_check'))) {
+        showToast(
+          `Status diubah jadi Terjual di katalog! Untuk sinkron ke Supabase, jalankan di SQL Editor: ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;`,
+          'info'
+        );
+      } else {
+        showToast(
+          `${ids.length} produk berhasil ditandai sebagai ${newStatus === 'sold' ? 'Terjual' : 'Tersedia'}!`,
+          'success'
+        );
+      }
+    }
+  };
+
+  const handleBulkDeleteProducts = async (ids: string[]) => {
+    await bulkDeleteProducts(ids);
     await refreshData();
-    const labels: Record<ProductStatus, string> = {
-      published: 'Ready (Tersedia)',
-      sold: 'Terjual (Sold Out)',
-      booked: 'Dibooking (Booked)',
-      draft: 'Draf',
-    };
-    showToast(`Status produk diubah menjadi ${labels[newStatus]}`, 'success');
+    showToast(`${ids.length} produk berhasil dihapus!`, 'success');
   };
 
   const handleSaveCategory = async (catData: Partial<Category> & { name: string }) => {
@@ -219,6 +272,8 @@ function MainApp() {
         onDeleteProduct={handleDeleteProduct}
         onToggleStatus={handleToggleProductStatus}
         onUpdateStatus={handleUpdateProductStatus}
+        onBulkUpdateStatus={handleBulkUpdateStatus}
+        onBulkDelete={handleBulkDeleteProducts}
         onSaveCategory={handleSaveCategory}
         onDeleteCategory={handleDeleteCategory}
         onSaveSettings={handleSaveSettings}

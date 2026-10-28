@@ -30,6 +30,8 @@ interface AdminDashboardProps {
   onDeleteProduct: (id: string) => Promise<void>;
   onToggleStatus: (id: string) => Promise<void>;
   onUpdateStatus?: (id: string, status: any) => Promise<void>;
+  onBulkUpdateStatus?: (ids: string[], status: any) => Promise<void>;
+  onBulkDelete?: (ids: string[]) => Promise<void>;
   onSaveCategory: (cat: Partial<Category> & { name: string }) => Promise<void>;
   onDeleteCategory: (id: string) => Promise<void>;
   onSaveSettings: (set: Partial<StoreSettings>) => Promise<void>;
@@ -48,6 +50,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onDeleteProduct,
   onToggleStatus,
   onUpdateStatus,
+  onBulkUpdateStatus,
+  onBulkDelete,
   onSaveCategory,
   onDeleteCategory,
   onSaveSettings,
@@ -279,6 +283,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onDeleteRequest={(prod) => setProductToDelete(prod)}
             onToggleStatus={onToggleStatus}
             onUpdateStatus={onUpdateStatus}
+            onBulkUpdateStatus={onBulkUpdateStatus}
+            onBulkDelete={onBulkDelete}
           />
         )}
 
@@ -310,6 +316,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isOpen={isProductModalOpen}
         productToEdit={productToEdit}
         categories={categories}
+        existingProducts={products}
         onClose={() => setIsProductModalOpen(false)}
         onSave={onSaveProduct}
       />
