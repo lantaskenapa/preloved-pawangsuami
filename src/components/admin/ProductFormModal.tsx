@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Category, Product, ProductCondition, ProductStatus } from '../../types';
 import { formatIDR, parseIDRInput, slugify } from '../../lib/formatters';
+import { compressImageFile } from '../../lib/imageCompressor';
 import {
   X,
   Upload,
@@ -8,6 +9,7 @@ import {
   Trash2,
   Image as ImageIcon,
   ShoppingBag,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -57,6 +59,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [minusPointsList, setMinusPointsList] = useState<string[]>([]);
   const [isFeatured, setIsFeatured] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionStatus, setCompressionStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (productToEdit) {
@@ -90,25 +94,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Handle local image file upload (converts to data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle local image file upload with client-side compression
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      // 5MB max check
-      if (file.size > 5 * 1024 * 1024) {
-        showToast(`File ${file.name} melebihi batas 5MB`, 'error');
-        return;
+    const fileList = Array.from(files);
+    setIsCompressing(true);
+    let successCount = 0;
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setCompressionStatus(`Mengompres ${file.name} (${i + 1}/${fileList.length})...`);
+      try {
+        const result = await compressImageFile(file, {
+          maxWidth: 1200,
+          maxHeight: 1200,
+          quality: 0.82,
+        });
+        setImages((prev) => [...prev, result.dataUrl]);
+        successCount++;
+      } catch (err: any) {
+        showToast(err?.message || `Gagal memproses file ${file.name}`, 'error');
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result && typeof reader.result === 'string') {
-          setImages((prev) => [...prev, reader.result as string]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    }
+
+    if (successCount > 0) {
+      showToast(`${successCount} foto berhasil dioptimasi & ditambahkan!`, 'success');
+    }
+
+    setIsCompressing(false);
+    setCompressionStatus(null);
     e.target.value = '';
   };
 
@@ -183,8 +199,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       });
       showToast(productToEdit ? 'Produk berhasil diperbarui!' : 'Produk baru berhasil ditambahkan!', 'success');
       onClose();
-    } catch {
-      showToast('Gagal menyimpan produk', 'error');
+    } catch (err: any) {
+      console.error('Error saving product:', err);
+      showToast(err?.message || 'Gagal menyimpan produk', 'error');
     } finally {
       setSaving(false);
     }
@@ -350,24 +367,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
           {/* Row 4: Photo Management (Upload + URL + Presets) */}
           <div className="border border-neutral-200 rounded-2xl p-4 sm:p-5 bg-neutral-50/50 space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <label className="block text-xs font-bold text-neutral-900 uppercase tracking-wider">
-                  Foto Produk ({images.length})
-                </label>
-                <p className="text-xs text-neutral-500">
-                  Unggah file foto langsung, masukkan URL gambar, atau pilih preset cepat
+                <div className="flex items-center gap-2">
+                  <label className="block text-xs font-bold text-neutral-900 uppercase tracking-wider">
+                    Foto Produk ({images.length})
+                  </label>
+                  {isCompressing && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-semibold animate-pulse border border-blue-200">
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                      {compressionStatus || 'Mengoptimasi foto...'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Foto langsung dikompresi otomatis (max 1200px) agar hemat memori & tersimpan mulus ke database
                 </p>
               </div>
 
               {/* Upload Input Button */}
-              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold transition-colors shadow-2xs">
-                <Upload className="w-3.5 h-3.5" />
-                <span>Unggah Foto</span>
+              <label className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
+                isCompressing
+                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  : 'bg-neutral-900 hover:bg-neutral-800 text-white cursor-pointer active:scale-98'
+              }`}>
+                {isCompressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                <span>{isCompressing ? 'Mengompres...' : 'Unggah Foto'}</span>
                 <input
                   type="file"
                   accept="image/*"
                   multiple
+                  disabled={isCompressing}
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -585,17 +615,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={saving}
-              className="px-5 py-2.5 rounded-xl border border-neutral-300 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
+              disabled={saving || isCompressing}
+              className="px-5 py-2.5 rounded-xl border border-neutral-300 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors disabled:opacity-50"
             >
               Batal
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || isCompressing}
               className="px-6 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all shadow-xs active:scale-98 disabled:opacity-50 flex items-center gap-2"
             >
-              {saving ? 'Menyimpan...' : productToEdit ? 'Simpan Perubahan' : 'Terbitkan Produk'}
+              {(saving || isCompressing) && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>
+                {saving
+                  ? 'Menyimpan ke Database...'
+                  : isCompressing
+                    ? 'Sedang Mengompres Foto...'
+                    : productToEdit
+                      ? 'Simpan Perubahan'
+                      : 'Terbitkan Produk'}
+              </span>
             </button>
           </div>
 

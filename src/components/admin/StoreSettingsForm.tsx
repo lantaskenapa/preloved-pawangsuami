@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { isSupabaseConnected, testSupabaseConnection } from '../../lib/supabaseClient';
+import { isSupabaseConnected, testSupabaseConnection, normalizeSupabaseUrl, normalizeSupabaseKey } from '../../lib/supabaseClient';
+import { syncAllProductsToSupabase } from '../../lib/storage';
 import {
   Save,
   ShoppingBag,
@@ -17,6 +18,8 @@ import {
   AlertCircle,
   RefreshCw,
   ExternalLink,
+  CloudUpload,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -57,21 +60,27 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
 
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [syncingProducts, setSyncingProducts] = useState(false);
   const [connectionResult, setConnectionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [connectedState, setConnectedState] = useState(isSupabaseConnected());
 
   const handleTestConnection = async () => {
-    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
+    const cleanUrl = normalizeSupabaseUrl(supabaseUrl);
+    const cleanKey = normalizeSupabaseKey(supabaseAnonKey);
+
+    if (cleanUrl !== supabaseUrl) setSupabaseUrl(cleanUrl);
+    if (cleanKey !== supabaseAnonKey) setSupabaseAnonKey(cleanKey);
+
+    if (!cleanUrl || !cleanKey) {
       showToast('Masukkan Supabase Project URL dan Anon Key terlebih dahulu', 'error');
       return;
     }
     setTestingConnection(true);
     setConnectionResult(null);
     try {
-      // Temporarily save to localStorage for testing
-      localStorage.setItem('psp_supabase_url', supabaseUrl.trim());
-      localStorage.setItem('psp_supabase_anon_key', supabaseAnonKey.trim());
-      const res = await testSupabaseConnection(supabaseUrl.trim(), supabaseAnonKey.trim());
+      localStorage.setItem('psp_supabase_url', cleanUrl);
+      localStorage.setItem('psp_supabase_anon_key', cleanKey);
+      const res = await testSupabaseConnection(cleanUrl, cleanKey);
       setConnectionResult(res);
       setConnectedState(res.success);
       if (res.success) {
@@ -90,9 +99,30 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     }
   };
 
+  const handleSyncToSupabase = async () => {
+    setSyncingProducts(true);
+    try {
+      const res = await syncAllProductsToSupabase();
+      if (res.success) {
+        showToast(`Berhasil menyinkronkan ${res.count} produk ke Supabase!`, 'success');
+      } else {
+        showToast(`Gagal sinkronisasi produk: ${res.error}`, 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal sinkronisasi data', 'error');
+    } finally {
+      setSyncingProducts(false);
+    }
+  };
+
   const handleSaveAll = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const cleanUrl = normalizeSupabaseUrl(supabaseUrl);
+    const cleanKey = normalizeSupabaseKey(supabaseAnonKey);
+    if (cleanUrl !== supabaseUrl) setSupabaseUrl(cleanUrl);
+    if (cleanKey !== supabaseAnonKey) setSupabaseAnonKey(cleanKey);
+
     try {
       await onSave({
         store_name: storeName.trim(),
@@ -104,8 +134,8 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         operational_hours: operationalHours.trim(),
         shipping_policy: shippingPolicy.trim(),
         return_policy: returnPolicy.trim(),
-        supabase_url: supabaseUrl.trim(),
-        supabase_anon_key: supabaseAnonKey.trim(),
+        supabase_url: cleanUrl,
+        supabase_anon_key: cleanKey,
       });
       showToast('Informasi toko berhasil disimpan!', 'success');
     } catch {
@@ -309,12 +339,15 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
                 Supabase Project URL
               </label>
               <input
-                type="url"
+                type="text"
                 value={supabaseUrl}
                 onChange={(e) => setSupabaseUrl(e.target.value)}
                 placeholder="https://xyzcompany.supabase.co"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono"
               />
+              <p className="mt-1 text-[11px] text-neutral-500 leading-normal">
+                Wajib berakhiran <strong>.supabase.co</strong>. Temukan di: <em>Settings (roda gigi) &gt; API &gt; Project URL</em>. <span className="text-amber-800 font-medium">Bukan link address bar browser dashboard.</span>
+              </p>
             </div>
 
             <div>
@@ -328,22 +361,36 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
                 placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono"
               />
+              <p className="mt-1 text-[11px] text-neutral-500 leading-normal">
+                Key berawalan <strong>eyJ...</strong>. Temukan di: <em>Settings &gt; API &gt; Project API keys &gt; anon public</em>.
+              </p>
             </div>
           </div>
 
-          {/* Action: Test Connection Button */}
+          {/* Action: Test Connection & Sync Buttons */}
           <div className="pt-1 flex flex-wrap items-center gap-3">
             <button
               type="button"
               disabled={testingConnection}
               onClick={handleTestConnection}
-              className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50"
+              className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${testingConnection ? 'animate-spin' : ''}`} />
               <span>{testingConnection ? 'Menguji Koneksi...' : 'Tes Koneksi Sekarang'}</span>
             </button>
+
+            <button
+              type="button"
+              disabled={syncingProducts || !connectedState}
+              onClick={handleSyncToSupabase}
+              className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs"
+              title="Unggah semua data produk yang ada saat ini ke database Supabase"
+            >
+              {syncingProducts ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CloudUpload className="w-3.5 h-3.5" />}
+              <span>{syncingProducts ? 'Menyinkronkan...' : 'Upload Semua Produk ke Supabase'}</span>
+            </button>
             <span className="text-[11px] text-neutral-400">
-              Uji apakah tabel database dapat dibaca & ditulis dari browser
+              Sinkronisasi batch untuk menyimpan semua katalog lokal ke database Supabase
             </span>
           </div>
 

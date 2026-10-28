@@ -2,6 +2,7 @@ import { Category, Product, ProductStatus, StoreSettings } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_SETTINGS } from './seedData';
 import { getSupabaseClient } from './supabaseClient';
 import { slugify } from './formatters';
+import { compressDataUrl } from './imageCompressor';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'psp_products_v1',
@@ -15,6 +16,60 @@ function notifyChange() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('psp_data_updated'));
   }
+}
+
+// Generate valid UUID compatible with Supabase UUID and TEXT primary keys
+export function generateProductId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Helper to safely write to localStorage without throwing QuotaExceededError
+export function safeSaveProductsToLocalStorage(products: Product[]): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+    return true;
+  } catch (err: any) {
+    console.warn('LocalStorage quota warning, creating lightweight storage cache:', err);
+    try {
+      // If quota exceeded, trim secondary high-res base64 images from localStorage copy
+      const lightweight = products.map((p) => ({
+        ...p,
+        images: p.images.map((img, idx) => {
+          if (idx === 0) return img; // keep primary cover
+          if (img.startsWith('data:') && img.length > 50000) {
+            return 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80';
+          }
+          return img;
+        }),
+      }));
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(lightweight));
+      return true;
+    } catch (e2) {
+      console.warn('LocalStorage completely full, proceeding without local caching:', e2);
+      return false;
+    }
+  }
+}
+
+// Helper to ensure slug is unique across products
+function generateUniqueSlug(baseName: string, existingList: Product[], currentId?: string): string {
+  const baseSlug = slugify(baseName) || 'produk';
+  let candidate = baseSlug;
+  let counter = 1;
+
+  while (existingList.some((p) => p.slug === candidate && p.id !== currentId)) {
+    counter++;
+    candidate = `${baseSlug}-${counter}`;
+  }
+  return candidate;
 }
 
 // Initialize LocalStorage with seed data if empty
@@ -119,63 +174,151 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
   const now = new Date().toISOString();
   let savedProduct: Product;
 
+  // Ensure any base64 images passed are compressed safely
+  let processedImages: string[] = [];
+  if (productInput.images && productInput.images.length > 0) {
+    processedImages = await Promise.all(
+      productInput.images.map(async (img) => {
+        if (img.startsWith('data:image/') && img.length > 150000) {
+          try {
+            return await compressDataUrl(img, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+          } catch {
+            return img;
+          }
+        }
+        return img;
+      })
+    );
+  } else {
+    processedImages = ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'];
+  }
+
   if (productInput.id) {
-    // Edit
-    const index = currentList.findIndex(p => p.id === productInput.id);
-    if (index === -1) throw new Error('Product not found');
-    
+    // Edit existing product
+    const index = currentList.findIndex((p) => p.id === productInput.id);
+    if (index === -1) throw new Error('Produk tidak ditemukan');
+
+    const cleanSlug = productInput.slug || generateUniqueSlug(productInput.name, currentList, productInput.id);
+
     savedProduct = {
       ...currentList[index],
       ...productInput,
-      slug: productInput.slug || slugify(productInput.name),
+      slug: cleanSlug,
+      images: processedImages,
       updated_at: now,
     } as Product;
     currentList[index] = savedProduct;
   } else {
-    // New
-    const newId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    // Create new product with valid UUID
+    const newId = generateProductId();
+    const cleanSlug = generateUniqueSlug(productInput.name, currentList);
+
     savedProduct = {
       id: newId,
-      name: productInput.name,
-      slug: productInput.slug || slugify(productInput.name),
-      price: productInput.price || 0,
-      original_price: productInput.original_price || undefined,
+      name: productInput.name.trim(),
+      slug: cleanSlug,
+      price: Number(productInput.price) || 0,
+      original_price: productInput.original_price ? Number(productInput.original_price) : undefined,
       category: productInput.category || 'others',
       condition: productInput.condition || 'Sangat Baik (90-95%)',
       description: productInput.description || '',
       story: productInput.story || '',
       completeness: productInput.completeness || [],
       minus_points: productInput.minus_points || [],
-      images: productInput.images && productInput.images.length > 0 
-        ? productInput.images 
-        : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
+      images: processedImages,
       shopee_url: productInput.shopee_url || 'https://shopee.co.id',
       status: productInput.status || 'published',
       is_featured: !!productInput.is_featured,
-      weight_grams: productInput.weight_grams || 500,
+      weight_grams: productInput.weight_grams ? Number(productInput.weight_grams) : 500,
       created_at: now,
       updated_at: now,
     };
     currentList.unshift(savedProduct);
   }
 
-  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(currentList));
+  // Safe local storage persistence (never throws QuotaExceededError)
+  safeSaveProductsToLocalStorage(currentList);
 
   // Sync with Supabase if configured
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { error } = await supabase.from('products').upsert(savedProduct);
+      const supabasePayload = {
+        id: savedProduct.id,
+        name: savedProduct.name,
+        slug: savedProduct.slug,
+        price: Math.round(Number(savedProduct.price)),
+        original_price: savedProduct.original_price ? Math.round(Number(savedProduct.original_price)) : null,
+        category: savedProduct.category,
+        condition: savedProduct.condition,
+        description: savedProduct.description || '',
+        story: savedProduct.story || null,
+        completeness: savedProduct.completeness || [],
+        minus_points: savedProduct.minus_points || [],
+        images: savedProduct.images || [],
+        shopee_url: savedProduct.shopee_url,
+        status: savedProduct.status || 'published',
+        is_featured: !!savedProduct.is_featured,
+        weight_grams: savedProduct.weight_grams ? Math.round(Number(savedProduct.weight_grams)) : 500,
+        created_at: savedProduct.created_at,
+        updated_at: savedProduct.updated_at,
+      };
+
+      const { error } = await supabase.from('products').upsert(supabasePayload);
       if (error) {
         console.error('Supabase product upsert error:', error);
+        throw new Error(`Supabase: ${error.message} (${error.hint || error.details || 'Cek tabel products'})`);
       }
-    } catch (e) {
-      console.warn('Could not sync product to Supabase:', e);
+    } catch (e: any) {
+      console.error('Could not sync product to Supabase:', e);
+      throw e;
     }
   }
 
   notifyChange();
   return savedProduct;
+}
+
+// Function to bulk sync all local products to Supabase
+export async function syncAllProductsToSupabase(): Promise<{ success: boolean; count: number; error?: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { success: false, count: 0, error: 'Supabase belum terhubung. Harap isi URL dan Anon Key terlebih dahulu.' };
+  }
+
+  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+
+  try {
+    const formattedPayloads = currentList.map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug || slugify(p.name),
+      price: Math.round(Number(p.price)),
+      original_price: p.original_price ? Math.round(Number(p.original_price)) : null,
+      category: p.category,
+      condition: p.condition,
+      description: p.description || '',
+      story: p.story || null,
+      completeness: p.completeness || [],
+      minus_points: p.minus_points || [],
+      images: p.images || [],
+      shopee_url: p.shopee_url,
+      status: p.status || 'published',
+      is_featured: !!p.is_featured,
+      weight_grams: p.weight_grams ? Math.round(Number(p.weight_grams)) : 500,
+      created_at: p.created_at || new Date().toISOString(),
+      updated_at: p.updated_at || new Date().toISOString(),
+    }));
+
+    const { error } = await supabase.from('products').upsert(formattedPayloads);
+    if (error) {
+      return { success: false, count: 0, error: `${error.message} (${error.hint || error.details || ''})` };
+    }
+    return { success: true, count: formattedPayloads.length };
+  } catch (err: any) {
+    return { success: false, count: 0, error: err?.message || 'Gagal sinkronisasi data ke Supabase.' };
+  }
 }
 
 export async function deleteProduct(id: string): Promise<boolean> {
