@@ -99,10 +99,6 @@ export function initializeStorage() {
             p.original_price = seedMatch.original_price;
             needsUpdate = true;
           }
-          if (seedMatch.status && seedMatch.status !== 'published' && p.status === 'published' && (p.id === 'prod-flannel-heavyweight' || p.id === 'prod-uniqlo-kaws')) {
-            p.status = seedMatch.status;
-            needsUpdate = true;
-          }
         }
         return p;
       });
@@ -144,24 +140,6 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
         let dbProducts = data as Product[];
-
-        // Sync protection: If a product was marked 'sold' locally,
-        // but Supabase rejected update due to check constraint products_status_check,
-        // preserve the user's 'sold' status so it DOES NOT revert to 'published'!
-        if (localList.length > 0) {
-          const localSoldSet = new Set(
-            localList.filter((p) => p.status === 'sold').map((p) => p.id)
-          );
-          if (localSoldSet.size > 0) {
-            dbProducts = dbProducts.map((p) => {
-              if (localSoldSet.has(p.id)) {
-                return { ...p, status: 'sold' };
-              }
-              return p;
-            });
-          }
-        }
-
         safeSaveProductsToLocalStorage(dbProducts);
         return dbProducts;
       }
@@ -472,20 +450,52 @@ export async function bulkUpdateProductStatus(ids: string[], newStatus: ProductS
 }
 
 export async function updateProductStatus(id: string, newStatus: ProductStatus): Promise<Product> {
-  const product = await getProductById(id);
-  if (!product) throw new Error('Product not found');
-  return saveProduct({ ...product, status: newStatus });
+  initializeStorage();
+  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+  const now = new Date().toISOString();
+
+  const index = currentList.findIndex((p) => p.id === id);
+  if (index === -1) {
+    throw new Error('Produk tidak ditemukan');
+  }
+
+  const updatedProduct: Product = {
+    ...currentList[index],
+    status: newStatus,
+    updated_at: now,
+  };
+  currentList[index] = updatedProduct;
+  safeSaveProductsToLocalStorage(currentList);
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ status: newStatus, updated_at: now })
+        .eq('id', id);
+      if (error) {
+        console.warn('Supabase status update error:', error);
+      }
+    } catch (e) {
+      console.warn('Supabase status update error:', e);
+    }
+  }
+
+  notifyChange();
+  return updatedProduct;
 }
 
 export async function toggleProductStatus(id: string, targetStatus?: ProductStatus): Promise<Product> {
-  const product = await getProductById(id);
-  if (!product) throw new Error('Product not found');
-  if (targetStatus) {
-    return saveProduct({ ...product, status: targetStatus });
-  }
-  // Toggle between published and sold if no specific status provided
-  const nextStatus = product.status === 'sold' ? 'published' : 'sold';
-  return saveProduct({ ...product, status: nextStatus });
+  initializeStorage();
+  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+  const current = currentList.find((p) => p.id === id);
+  if (!current) throw new Error('Produk tidak ditemukan');
+
+  const nextStatus = targetStatus || (current.status === 'sold' ? 'published' : 'sold');
+  return updateProductStatus(id, nextStatus);
 }
 
 // ---------------- CATEGORIES ----------------
