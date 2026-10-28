@@ -32,16 +32,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
   return (
     <div className={`group bg-white rounded-xl sm:rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
       isSold 
-        ? 'border-neutral-200/70 shadow-xs bg-neutral-50/30' 
+        ? 'border-neutral-200/70 shadow-xs bg-white' 
         : isBooked 
-          ? 'border-amber-200/80 shadow-[0_2px_10px_rgba(245,158,11,0.06)]' 
-          : 'border-neutral-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.07)] hover:border-neutral-300'
+          ? 'border-amber-200/80 shadow-[0_2px_10px_rgba(245,158,11,0.06)] bg-white' 
+          : 'border-neutral-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.07)] hover:border-neutral-300 bg-white'
     } overflow-hidden`}>
       <div>
         {/* Image Container */}
         <div 
           onClick={() => onSelect(product)}
-          className="relative aspect-4/3 w-full bg-gradient-to-b from-neutral-50 to-neutral-100/90 overflow-hidden cursor-pointer flex items-center justify-center p-2"
+          className="relative aspect-4/3 w-full bg-white overflow-hidden cursor-pointer flex items-center justify-center p-2.5"
         >
           {primaryImage ? (
             <img

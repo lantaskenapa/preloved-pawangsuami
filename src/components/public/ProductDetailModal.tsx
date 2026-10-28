@@ -72,10 +72,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2">
           {/* Left Column: Image Gallery */}
-          <div className="p-4 sm:p-6 bg-neutral-50/60 border-b md:border-b-0 md:border-r border-neutral-200 flex flex-col justify-between">
+          <div className="p-4 sm:p-6 bg-white border-b md:border-b-0 md:border-r border-neutral-200 flex flex-col justify-between">
             <div>
               {/* Main Image */}
-              <div className="relative aspect-4/3 sm:aspect-square w-full rounded-2xl overflow-hidden bg-gradient-to-b from-neutral-100 to-neutral-200/60 border border-neutral-200/80 shadow-xs flex items-center justify-center p-3">
+              <div className="relative aspect-4/3 sm:aspect-square w-full rounded-2xl overflow-hidden bg-white border border-neutral-200/80 shadow-xs flex items-center justify-center p-3">
                 <img
                   src={images[activeImageIndex]}
                   alt={`${product.name} - foto ${activeImageIndex + 1}`}

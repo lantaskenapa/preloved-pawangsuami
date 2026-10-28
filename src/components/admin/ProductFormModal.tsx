@@ -142,7 +142,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
     try {
       const apiKey = (typeof window !== 'undefined' ? localStorage.getItem('psp_gemini_api_key') : '') || '';
-      showToast('AI sedang memproses foto & menghapus background menjadi transparan...', 'info');
+      showToast('AI sedang mendiagnosa background dan memproses Magic Thumbnail...', 'info');
 
       const result = await executeMagicThumbnail(targetImage, apiKey);
       if (result.success && result.transparentImageUrl) {
@@ -535,7 +535,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   title={
                     images.length === 0
                       ? 'Unggah foto terlebih dahulu untuk mengaktifkan Magic Thumbnail'
-                      : 'Gunakan AI untuk menghapus background foto utama menjadi transparan'
+                      : 'Gunakan AI untuk mendiagnosa dan membuat Magic Thumbnail transparan'
                   }
                 >
                   {isMagicLoading && magicTargetIndex === 0 ? (
@@ -545,8 +545,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   )}
                   <span>
                     {isMagicLoading && magicTargetIndex === 0
-                      ? 'Menghapus Background...'
-                      : 'Magic Thumbnail (Hapus Background)'}
+                      ? 'Mendiagnosa & Memproses...'
+                      : 'Magic Thumbnail'}
                   </span>
                 </button>
 
@@ -608,7 +608,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           e.preventDefault();
                           handleDropImage(index);
                         }}
-                        className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-neutral-100 shadow-2xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                        className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-white shadow-2xs transition-all cursor-grab active:cursor-grabbing select-none ${
                           isThumbnail
                             ? 'border-neutral-900 ring-2 ring-neutral-900/10'
                             : isDragOver
@@ -616,7 +616,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               : 'border-neutral-200 hover:border-neutral-400'
                         } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                       >
-                        <div className="w-full h-full flex items-center justify-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:10px_10px] bg-neutral-100">
+                        <div className="w-full h-full flex items-center justify-center bg-white">
                           <img
                             src={img}
                             alt={`foto ${index + 1}`}
@@ -691,7 +691,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                   handleMagicThumbnail(index);
                                 }}
                                 className="py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-0.5 cursor-pointer active:scale-95"
-                                title="Hapus background foto ini dengan AI"
+                                title="Magic Thumbnail AI"
                               >
                                 <Sparkles className="w-2.5 h-2.5 text-amber-300" />
                               </button>
@@ -705,7 +705,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 handleMagicThumbnail(index);
                               }}
                               className="flex-1 py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
-                              title="Hapus background foto thumbnail dengan AI"
+                              title="Magic Thumbnail AI"
                             >
                               {isMagicLoading && magicTargetIndex === index ? (
                                 <Loader2 className="w-2.5 h-2.5 animate-spin" />

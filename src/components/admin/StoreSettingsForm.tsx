@@ -99,31 +99,70 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     }
     setTestingGemini(true);
     setGeminiTestResult(null);
-    try {
-      const res = await fetch('/api/gemini/test-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: cleanKey }),
-      });
 
-      const contentType = res.headers.get('content-type') || '';
-      let data: any;
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(
-          text.includes('<!doctype') || text.includes('<html')
-            ? `Server backend belum merespon (${res.status}). Tunggu 2-3 detik lalu klik tes kembali.`
-            : `Respon server (${res.status}): ${text.slice(0, 100)}`
+    // Helper to validate directly against Google Gemini REST API (works everywhere including Vercel/Netlify static deployments)
+    const testDirectlyWithGoogle = async (key: string) => {
+      try {
+        const googleRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash?key=${encodeURIComponent(key)}`
         );
+        const googleData = await googleRes.json();
+        if (googleRes.ok && (googleData.name || googleData.displayName)) {
+          return {
+            success: true,
+            message: `API Key Gemini valid & aktif! Terhubung ke ${googleData.displayName || 'Gemini 3.8 Flash'}.`,
+          };
+        }
+        const errMsg = googleData?.error?.message || 'API Key tidak valid atau kuota tidak mencukupi.';
+        return {
+          success: false,
+          message: errMsg,
+        };
+      } catch (directErr: any) {
+        return {
+          success: false,
+          message: directErr?.message || 'Gagal menghubungi Google Gemini API.',
+        };
+      }
+    };
+
+    try {
+      let data: { success: boolean; message: string } | null = null;
+
+      // 1. Try server backend endpoint first (if Express server.ts is active)
+      try {
+        const res = await fetch('/api/gemini/test-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: cleanKey }),
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          data = await res.json();
+        } else if (res.status === 404 || !contentType.includes('application/json')) {
+          // If 404 (e.g. running on Vercel edge/static hosting without Express backend), fallback to direct Google API
+          data = await testDirectlyWithGoogle(cleanKey);
+        } else if (contentType.includes('application/json')) {
+          data = await res.json();
+        } else {
+          data = await testDirectlyWithGoogle(cleanKey);
+        }
+      } catch {
+        // Network/proxy error on /api/gemini/test-key -> fallback to direct Google API
+        data = await testDirectlyWithGoogle(cleanKey);
+      }
+
+      if (!data) {
+        data = await testDirectlyWithGoogle(cleanKey);
       }
 
       setGeminiTestResult(data);
       if (data.success) {
         showToast('API Key Gemini valid & terhubung!', 'success');
         localStorage.setItem('psp_gemini_api_key', cleanKey);
-        await fetch('/api/gemini-config', {
+        // Persist to server if server is available
+        fetch('/api/gemini-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiKey: cleanKey }),

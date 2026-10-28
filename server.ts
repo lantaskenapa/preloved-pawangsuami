@@ -203,7 +203,7 @@ async function startServer() {
                 },
               },
               {
-                text: 'Isolate the main preloved product subject, remove the entire background making it a completely transparent cutout PNG, keeping the product crisp and clean for an e-commerce catalog card.',
+                text: 'Diagnose this product photo carefully: 1) Identify the main preloved product item (clothing, shoes, electronic device, game box, etc.) and preserve 100% of its details, physical silhouette, and edges. Do not erode, cut into, or alter any part of the item. 2) Identify the surrounding floor, table, or wall background and shadows. 3) Cleanly remove only the identified background, turning it into a transparent PNG alpha cutout suitable for an e-commerce catalog card.',
               },
             ],
           },
