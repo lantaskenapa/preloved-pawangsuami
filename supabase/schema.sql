@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. Create Categories Table
 CREATE TABLE IF NOT EXISTS public.categories (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     icon TEXT,
@@ -19,18 +19,20 @@ CREATE TABLE IF NOT EXISTS public.categories (
 
 -- 3. Create Products Table
 CREATE TABLE IF NOT EXISTS public.products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     price BIGINT NOT NULL CHECK (price >= 0),
+    original_price BIGINT,
     category TEXT NOT NULL,
     condition TEXT NOT NULL,
     description TEXT NOT NULL,
     story TEXT,
     completeness JSONB DEFAULT '[]'::jsonb,
+    minus_points JSONB DEFAULT '[]'::jsonb,
     images JSONB DEFAULT '[]'::jsonb,
     shopee_url TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published', 'sold', 'booked')),
     is_featured BOOLEAN DEFAULT false,
     weight_grams INT DEFAULT 500,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -68,41 +70,48 @@ ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.store_settings ENABLE ROW LEVEL SECURITY;
 
 -- Categories RLS
--- Anyone can view categories
+DROP POLICY IF EXISTS "Public categories are viewable by everyone" ON public.categories;
+DROP POLICY IF EXISTS "Admins can manage categories" ON public.categories;
+DROP POLICY IF EXISTS "Allow manage categories" ON public.categories;
+
 CREATE POLICY "Public categories are viewable by everyone" 
 ON public.categories FOR SELECT 
 USING (true);
 
--- Authenticated admins can insert/update/delete categories
-CREATE POLICY "Admins can manage categories" 
+CREATE POLICY "Allow manage categories" 
 ON public.categories FOR ALL 
-TO authenticated 
+TO anon, authenticated 
 USING (true) 
 WITH CHECK (true);
 
 -- Products RLS
--- Public can ONLY view published products
-CREATE POLICY "Public can view published products only" 
-ON public.products FOR SELECT 
-USING (status = 'published');
+DROP POLICY IF EXISTS "Public can view published products only" ON public.products;
+DROP POLICY IF EXISTS "Public can view products except draft" ON public.products;
+DROP POLICY IF EXISTS "Admins can view and manage all products" ON public.products;
+DROP POLICY IF EXISTS "Allow manage products" ON public.products;
 
--- Authenticated admins can view all products (including draft) and manage them
-CREATE POLICY "Admins can view and manage all products" 
+CREATE POLICY "Public can view products except draft" 
+ON public.products FOR SELECT 
+USING (status IN ('published', 'sold', 'booked'));
+
+CREATE POLICY "Allow manage products" 
 ON public.products FOR ALL 
-TO authenticated 
+TO anon, authenticated 
 USING (true) 
 WITH CHECK (true);
 
 -- Store Settings RLS
--- Public can view store settings
+DROP POLICY IF EXISTS "Public can view store settings" ON public.store_settings;
+DROP POLICY IF EXISTS "Admins can update store settings" ON public.store_settings;
+DROP POLICY IF EXISTS "Allow manage store settings" ON public.store_settings;
+
 CREATE POLICY "Public can view store settings" 
 ON public.store_settings FOR SELECT 
 USING (true);
 
--- Authenticated admins can update store settings
-CREATE POLICY "Admins can update store settings" 
+CREATE POLICY "Allow manage store settings" 
 ON public.store_settings FOR ALL 
-TO authenticated 
+TO anon, authenticated 
 USING (true) 
 WITH CHECK (true);
 
@@ -110,15 +119,15 @@ WITH CHECK (true);
 -- INITIAL SEED DATA
 -- =========================================================================
 
-INSERT INTO public.categories (name, slug, icon, description, display_order)
+INSERT INTO public.categories (id, name, slug, icon, description, display_order)
 VALUES
-    ('Games', 'games', 'Gamepad2', 'Konsol retro, game fisik PS4/Switch, handheld & aksesoris gaming', 1),
-    ('Shirts', 'shirts', 'Shirt', 'Kaos band vintage, flannel, streetwear & jaket koleksi pribadi', 2),
-    ('Electronics', 'electronics', 'Tv', 'Audio DAC, headphone audiophile, monitor & periferal audio visual', 3),
-    ('Accessories', 'accessories', 'Watch', 'Jam tangan mekanik/g-shock, dompet kulit, kacamata & gantungan kunci', 4),
-    ('Gadgets', 'gadgets', 'Smartphone', 'Tablet, smartwatch, kamera digital & charger multiport', 5),
-    ('Others', 'others', 'Package', 'Buku artbook, action figure hobi, koleksi unik rumahan', 6)
-ON CONFLICT (slug) DO NOTHING;
+    ('cat-games', 'Games', 'games', 'Gamepad2', 'Konsol retro, game fisik PS4/Switch, handheld & aksesoris gaming', 1),
+    ('cat-shirts', 'Shirts', 'shirts', 'Shirt', 'Kaos band vintage, flannel, streetwear & jaket koleksi pribadi', 2),
+    ('cat-electronics', 'Electronics', 'electronics', 'Tv', 'Audio DAC, headphone audiophile, monitor & periferal audio visual', 3),
+    ('cat-accessories', 'Accessories', 'accessories', 'Watch', 'Jam tangan mekanik/g-shock, dompet kulit, kacamata & gantungan kunci', 4),
+    ('cat-gadgets', 'Gadgets', 'gadgets', 'Smartphone', 'Tablet, smartwatch, kamera digital & charger multiport', 5),
+    ('cat-others', 'Others', 'others', 'Package', 'Buku artbook, action figure hobi, koleksi unik rumahan', 6)
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.store_settings (id, store_name, tagline, bio, shopee_store_url, shipping_origin, whatsapp_contact, operational_hours, shipping_policy, return_policy)
 VALUES (

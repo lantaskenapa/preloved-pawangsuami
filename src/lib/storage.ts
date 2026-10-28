@@ -165,7 +165,10 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      await supabase.from('products').upsert(savedProduct);
+      const { error } = await supabase.from('products').upsert(savedProduct);
+      if (error) {
+        console.error('Supabase product upsert error:', error);
+      }
     } catch (e) {
       console.warn('Could not sync product to Supabase:', e);
     }
@@ -342,13 +345,16 @@ export async function saveStoreSettings(settingsInput: Partial<StoreSettings>): 
     localStorage.setItem('psp_supabase_anon_key', settingsInput.supabase_anon_key || '');
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(settingsInput.supabase_url, settingsInput.supabase_anon_key);
   if (supabase) {
     try {
-      await supabase.from('store_settings').upsert({
+      const { error } = await supabase.from('store_settings').upsert({
         ...updated,
         id: 'primary',
       });
+      if (error) {
+        console.error('Supabase store settings upsert error:', error);
+      }
     } catch (e) {
       console.warn('Supabase store settings error:', e);
     }

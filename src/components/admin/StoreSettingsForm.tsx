@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { isSupabaseConnected } from '../../lib/supabaseClient';
+import { isSupabaseConnected, testSupabaseConnection } from '../../lib/supabaseClient';
 import {
   Save,
   ShoppingBag,
@@ -13,6 +13,9 @@ import {
   Upload,
   RotateCcw,
   CheckCircle,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
   ExternalLink,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
@@ -53,7 +56,39 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   );
 
   const [saving, setSaving] = useState(false);
-  const isConnected = isSupabaseConnected();
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [connectedState, setConnectedState] = useState(isSupabaseConnected());
+
+  const handleTestConnection = async () => {
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
+      showToast('Masukkan Supabase Project URL dan Anon Key terlebih dahulu', 'error');
+      return;
+    }
+    setTestingConnection(true);
+    setConnectionResult(null);
+    try {
+      // Temporarily save to localStorage for testing
+      localStorage.setItem('psp_supabase_url', supabaseUrl.trim());
+      localStorage.setItem('psp_supabase_anon_key', supabaseAnonKey.trim());
+      const res = await testSupabaseConnection(supabaseUrl.trim(), supabaseAnonKey.trim());
+      setConnectionResult(res);
+      setConnectedState(res.success);
+      if (res.success) {
+        showToast('Koneksi Supabase berhasil!', 'success');
+      } else {
+        showToast('Koneksi Supabase gagal. Periksa pesan di bawah.', 'error');
+      }
+    } catch (err: any) {
+      setConnectionResult({
+        success: false,
+        message: err?.message || 'Gagal menghubungi Supabase.',
+      });
+      setConnectedState(false);
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   const handleSaveAll = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,17 +290,17 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
             </div>
 
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-              isConnected
+              connectedState
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-neutral-100 text-neutral-600 border-neutral-200'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
-              {isConnected ? 'Supabase Terhubung' : 'Penyimpanan Lokal Aktif (Fallback)'}
+              <span className={`w-1.5 h-1.5 rounded-full ${connectedState ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
+              {connectedState ? 'Supabase Terhubung' : 'Penyimpanan Lokal Aktif (Fallback)'}
             </span>
           </div>
 
           <p className="text-xs text-neutral-500 leading-relaxed">
-            Aplikasi ini telah siap terhubung ke Supabase dengan skema lengkap di <code>supabase/schema.sql</code> (tabel <code>products</code>, <code>categories</code>, <code>store_settings</code>, serta aturan RLS). Jika Anda memiliki proyek Supabase, masukkan kredensial di bawah untuk sinkronisasi cloud real-time:
+            Aplikasi ini terhubung langsung ke Supabase menggunakan REST API klien. <strong>Tidak perlu klik tombol "Connect" di Supabase</strong>. Cukup masukkan <em>Project URL</em> dan <em>Anon Key</em> Anda di bawah, lalu klik <strong>Tes Koneksi</strong>:
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -295,6 +330,55 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
               />
             </div>
           </div>
+
+          {/* Action: Test Connection Button */}
+          <div className="pt-1 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={testingConnection}
+              onClick={handleTestConnection}
+              className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${testingConnection ? 'animate-spin' : ''}`} />
+              <span>{testingConnection ? 'Menguji Koneksi...' : 'Tes Koneksi Sekarang'}</span>
+            </button>
+            <span className="text-[11px] text-neutral-400">
+              Uji apakah tabel database dapat dibaca & ditulis dari browser
+            </span>
+          </div>
+
+          {/* Test Connection Result Box */}
+          {connectionResult && (
+            <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
+              connectionResult.success
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}>
+              {connectionResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <div className="font-bold">
+                  {connectionResult.success ? 'Koneksi Berhasil!' : 'Koneksi Gagal'}
+                </div>
+                <div className="mt-0.5 text-[11px]">{connectionResult.message}</div>
+                {!connectionResult.success && connectionResult.message.includes('RLS') && (
+                  <div className="mt-2 p-2 rounded-lg bg-white/80 border border-red-200 font-mono text-[10px] text-neutral-800">
+                    <p className="font-sans font-bold text-red-800 mb-1">
+                      Solusi: Buka SQL Editor di Supabase dan jalankan 3 baris perintah ini:
+                    </p>
+                    <code>
+                      ALTER TABLE public.products DISABLE ROW LEVEL SECURITY;<br />
+                      ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;<br />
+                      ALTER TABLE public.store_settings DISABLE ROW LEVEL SECURITY;
+                    </code>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Submit Button */}
