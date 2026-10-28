@@ -620,7 +620,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           <img
                             src={img}
                             alt={`foto ${index + 1}`}
-                            className="w-full h-full object-contain pointer-events-none p-1 drop-shadow-sm"
+                            className="max-h-full max-w-full w-auto h-auto object-contain pointer-events-none p-1"
                           />
                         </div>
 

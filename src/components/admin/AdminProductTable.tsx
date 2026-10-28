@@ -269,9 +269,9 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                       {/* Product Name & Photo */}
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-neutral-100 overflow-hidden shrink-0 border border-neutral-200/80">
+                          <div className="w-12 h-12 rounded-xl bg-white overflow-hidden shrink-0 border border-neutral-200/80 flex items-center justify-center p-0.5">
                             {img ? (
-                              <img src={img} alt={prod.name} className="w-full h-full object-cover" />
+                              <img src={img} alt={prod.name} className="max-h-full max-w-full w-auto h-auto object-contain" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-neutral-400 text-[10px]">
                                 No Pic
