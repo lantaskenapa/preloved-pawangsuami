@@ -24,6 +24,11 @@ import {
   Lock,
   Copy,
   Check,
+  Sparkles,
+  Key,
+  Eye,
+  EyeOff,
+  ExternalLink,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
@@ -58,12 +63,57 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') : '') || permanentConfig.anonKey || ''
   );
 
+  const [geminiApiKey, setGeminiApiKey] = useState(
+    (typeof window !== 'undefined' ? localStorage.getItem('psp_gemini_api_key') : '') || settings.gemini_api_key || ''
+  );
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [testingGemini, setTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [connectionResult, setConnectionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [connectedState, setConnectedState] = useState(isSupabaseConnected());
   const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleTestGeminiKey = async () => {
+    const cleanKey = geminiApiKey.trim();
+    if (!cleanKey) {
+      showToast('Masukkan API Key Gemini terlebih dahulu', 'error');
+      return;
+    }
+    setTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await fetch('/api/gemini/test-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: cleanKey }),
+      });
+      const data = await res.json();
+      setGeminiTestResult(data);
+      if (data.success) {
+        showToast('API Key Gemini valid & terhubung!', 'success');
+        localStorage.setItem('psp_gemini_api_key', cleanKey);
+        await fetch('/api/gemini-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: cleanKey }),
+        }).catch(() => {});
+      } else {
+        showToast(`API Key gagal: ${data.message || 'Cek kembali API key'}`, 'error');
+      }
+    } catch (err: any) {
+      setGeminiTestResult({
+        success: false,
+        message: err?.message || 'Gagal menghubungi server.',
+      });
+      showToast('Gagal menguji API Key Gemini', 'error');
+    } finally {
+      setTestingGemini(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     const cleanUrl = normalizeSupabaseUrl(supabaseUrl);
@@ -134,6 +184,17 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         await savePermanentSupabaseConfig(cleanUrl, cleanKey);
       }
 
+      // 1b. Save Gemini API Key permanently to server & localStorage
+      const cleanGeminiKey = geminiApiKey.trim();
+      if (cleanGeminiKey) {
+        localStorage.setItem('psp_gemini_api_key', cleanGeminiKey);
+        await fetch('/api/gemini-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: cleanGeminiKey }),
+        }).catch(() => {});
+      }
+
       // 2. Save settings to app storage & Supabase
       await onSave({
         store_name: storeName.trim(),
@@ -147,8 +208,9 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         return_policy: settings.return_policy || '',
         supabase_url: cleanUrl,
         supabase_anon_key: cleanKey,
+        gemini_api_key: cleanGeminiKey,
       });
-      showToast('Pengaturan toko & koneksi Supabase paten berhasil disimpan!', 'success');
+      showToast('Pengaturan toko, Supabase, & API Key Gemini berhasil disimpan!', 'success');
     } catch {
       showToast('Gagal menyimpan pengaturan toko', 'error');
     } finally {
@@ -241,6 +303,110 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           </div>
         </div>
 
+        {/* Section 2: Google Gemini AI - Magic Thumbnail */}
+        <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600">
+                <Sparkles className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
+                Google Gemini AI - Magic Thumbnail
+              </h3>
+            </div>
+
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+              geminiApiKey.trim()
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${geminiApiKey.trim() ? 'bg-indigo-500' : 'bg-neutral-400'}`}></span>
+              {geminiApiKey.trim() ? 'Gemini AI Siap' : 'Key Belum Diisi'}
+            </span>
+          </div>
+
+          <p className="text-xs text-neutral-500 leading-relaxed">
+            Fitur <strong>Magic Thumbnail</strong> menggunakan AI Google Gemini untuk mendeteksi barang preloved dan menghapus background foto menjadi transparan secara otomatis. Foto produk akan terlihat rapi dan menonjol di kartu etalase katalog.
+          </p>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                Gemini API Key
+              </label>
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+              >
+                <span>Dapatkan API Key Gratis di Google AI Studio</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+
+            <div className="relative">
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
+                <Key className="w-4 h-4" />
+              </div>
+              <input
+                type={showGeminiKey ? 'text' : 'password'}
+                value={geminiApiKey}
+                onChange={(e) => setGeminiApiKey(e.target.value)}
+                placeholder="AIzaSy..."
+                className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-indigo-600"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGeminiKey(!showGeminiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
+                title={showGeminiKey ? 'Sembunyikan' : 'Tampilkan'}
+              >
+                {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-neutral-500">
+              Kunci diawali dengan <code>AIzaSy...</code>. API key disimpan aman di server dan otomatis digunakan oleh tombol Magic Thumbnail saat menambah produk.
+            </p>
+          </div>
+
+          {/* Test Gemini Key Action */}
+          <div className="pt-1 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={testingGemini}
+              onClick={handleTestGeminiKey}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${testingGemini ? 'animate-spin' : ''}`} />
+              <span>{testingGemini ? 'Menguji API Key...' : 'Tes API Key Gemini'}</span>
+            </button>
+            <span className="text-[11px] text-neutral-400">
+              Pastikan kuota API aktif untuk fitur Magic Thumbnail otomatis
+            </span>
+          </div>
+
+          {/* Test Gemini Result Box */}
+          {geminiTestResult && (
+            <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
+              geminiTestResult.success
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-red-50 border-red-200 text-red-900'
+            }`}>
+              {geminiTestResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-0.5">
+                <span className="font-bold block">
+                  {geminiTestResult.success ? 'API Key Valid!' : 'Pengujian API Key Gagal'}
+                </span>
+                <span className="block">{geminiTestResult.message}</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Section 3: Supabase Cloud Database Integration */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">

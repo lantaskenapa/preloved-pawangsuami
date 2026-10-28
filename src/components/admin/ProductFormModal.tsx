@@ -17,7 +17,10 @@ import {
   ChevronRight,
   CheckCircle2,
   XCircle,
+  Sparkles,
+  Wand2,
 } from 'lucide-react';
+import { executeMagicThumbnail } from '../../lib/magicThumbnail';
 import { useToast } from '../ui/Toast';
 
 interface ProductFormModalProps {
@@ -48,7 +51,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [shopeeUrl, setShopeeUrl] = useState('');
   const [status, setStatus] = useState<ProductStatus>('published');
   const [images, setImages] = useState<string[]>([]);
-  const [customImageUrl, setCustomImageUrl] = useState('');
+  const [isMagicLoading, setIsMagicLoading] = useState(false);
+  const [magicTargetIndex, setMagicTargetIndex] = useState<number | null>(null);
   const [completenessInput, setCompletenessInput] = useState('');
   const [completenessList, setCompletenessList] = useState<string[]>([]);
   const [minusPointInput, setMinusPointInput] = useState('');
@@ -126,10 +130,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     e.target.value = '';
   };
 
-  const handleAddImageUrl = () => {
-    if (!customImageUrl.trim()) return;
-    setImages((prev) => [...prev, customImageUrl.trim()]);
-    setCustomImageUrl('');
+  const handleMagicThumbnail = async (targetIndex = 0) => {
+    if (images.length === 0 || targetIndex >= images.length) {
+      showToast('Unggah foto produk terlebih dahulu untuk mengaktifkan Magic Thumbnail', 'error');
+      return;
+    }
+
+    const targetImage = images[targetIndex];
+    setIsMagicLoading(true);
+    setMagicTargetIndex(targetIndex);
+
+    try {
+      const apiKey = (typeof window !== 'undefined' ? localStorage.getItem('psp_gemini_api_key') : '') || '';
+      showToast('AI sedang memproses foto & menghapus background menjadi transparan...', 'info');
+
+      const result = await executeMagicThumbnail(targetImage, apiKey);
+      if (result.success && result.transparentImageUrl) {
+        setImages((prev) => {
+          const copy = [...prev];
+          copy[targetIndex] = result.transparentImageUrl!;
+          return copy;
+        });
+        showToast('✨ Magic Thumbnail berhasil! Background foto produk telah diubah menjadi transparan.', 'success');
+      } else {
+        showToast(`Gagal: ${result.error || 'Terjadi kendala saat memproses gambar'}`, 'error');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal memproses Magic Thumbnail', 'error');
+    } finally {
+      setIsMagicLoading(false);
+      setMagicTargetIndex(null);
+    }
   };
 
   const handleCopyFromTemplate = (templateId: string) => {
@@ -488,41 +519,55 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 </p>
               </div>
 
-              {/* Upload Input Button */}
-              <label className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
-                isCompressing
-                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                  : 'bg-neutral-900 hover:bg-neutral-800 text-white cursor-pointer active:scale-98'
-              }`}>
-                {isCompressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                <span>{isCompressing ? 'Mengompres...' : 'Unggah Foto'}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  disabled={isCompressing}
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Magic Thumbnail Button */}
+                <button
+                  type="button"
+                  disabled={images.length === 0 || isMagicLoading || isCompressing}
+                  onClick={() => handleMagicThumbnail(0)}
+                  className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                    images.length === 0
+                      ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
+                      : isMagicLoading && magicTargetIndex === 0
+                        ? 'bg-indigo-700 text-white cursor-wait animate-pulse'
+                        : 'bg-gradient-to-r from-purple-600 via-indigo-600 to-indigo-700 hover:from-purple-700 hover:to-indigo-800 text-white cursor-pointer active:scale-98 shadow-sm hover:shadow'
+                  }`}
+                  title={
+                    images.length === 0
+                      ? 'Unggah foto terlebih dahulu untuk mengaktifkan Magic Thumbnail'
+                      : 'Gunakan AI untuk menghapus background foto utama menjadi transparan'
+                  }
+                >
+                  {isMagicLoading && magicTargetIndex === 0 ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  )}
+                  <span>
+                    {isMagicLoading && magicTargetIndex === 0
+                      ? 'Menghapus Background...'
+                      : 'Magic Thumbnail (Hapus Background)'}
+                  </span>
+                </button>
 
-            {/* URL input field */}
-            <div className="flex items-center gap-2">
-              <input
-                type="url"
-                value={customImageUrl}
-                onChange={(e) => setCustomImageUrl(e.target.value)}
-                placeholder="Atau tempel URL gambar (https://...)"
-                className="flex-1 px-3 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 bg-white"
-              />
-              <button
-                type="button"
-                onClick={handleAddImageUrl}
-                className="px-3 py-2 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs font-semibold text-neutral-700"
-              >
-                Tambah URL
-              </button>
+                {/* Upload Input Button */}
+                <label className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all shadow-2xs ${
+                  isCompressing
+                    ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    : 'bg-neutral-900 hover:bg-neutral-800 text-white cursor-pointer active:scale-98'
+                }`}>
+                  {isCompressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                  <span>{isCompressing ? 'Mengompres...' : 'Unggah Foto'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={isCompressing}
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             </div>
 
             {/* Rendered Image Thumbnails Grid with Drag & Drop & Thumbnail selector */}
@@ -571,11 +616,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               : 'border-neutral-200 hover:border-neutral-400'
                         } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                       >
-                        <img
-                          src={img}
-                          alt={`foto ${index + 1}`}
-                          className="w-full h-full object-cover pointer-events-none"
-                        />
+                        <div className="w-full h-full flex items-center justify-center bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:10px_10px] bg-neutral-100">
+                          <img
+                            src={img}
+                            alt={`foto ${index + 1}`}
+                            className="w-full h-full object-contain pointer-events-none p-1 drop-shadow-sm"
+                          />
+                        </div>
 
                         {/* Top Badges */}
                         <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none z-10">
@@ -604,7 +651,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           </button>
                         </div>
 
-                        {/* Bottom Actions: Quick Reorder / Set as Thumbnail */}
+                        {/* Bottom Actions: Quick Reorder / Set as Thumbnail / Magic Cutout */}
                         <div className="absolute bottom-1.5 inset-x-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           {/* Move Left Button */}
                           {index > 0 && (
@@ -621,22 +668,52 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             </button>
                           )}
 
-                          {/* Set as Thumbnail Button */}
+                          {/* Set as Thumbnail or Magic Cutout */}
                           {!isThumbnail ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetThumbnail(index);
+                                }}
+                                className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
+                                title="Jadikan foto ini Thumbnail Utama"
+                              >
+                                <Star className="w-2.5 h-2.5 text-amber-400" />
+                                <span className="truncate">Sampul</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isMagicLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMagicThumbnail(index);
+                                }}
+                                className="py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-0.5 cursor-pointer active:scale-95"
+                                title="Hapus background foto ini dengan AI"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                              </button>
+                            </>
+                          ) : (
                             <button
                               type="button"
+                              disabled={isMagicLoading}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleSetThumbnail(index);
+                                handleMagicThumbnail(index);
                               }}
-                              className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
-                              title="Jadikan foto ini Thumbnail Utama"
+                              className="flex-1 py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
+                              title="Hapus background foto thumbnail dengan AI"
                             >
-                              <Star className="w-2.5 h-2.5 text-amber-400" />
-                              <span className="truncate">Jadikan Sampul</span>
+                              {isMagicLoading && magicTargetIndex === index ? (
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              ) : (
+                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                              )}
+                              <span className="truncate">Magic Cutout</span>
                             </button>
-                          ) : (
-                            <div className="flex-1"></div>
                           )}
 
                           {/* Move Right Button */}

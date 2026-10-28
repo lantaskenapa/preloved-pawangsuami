@@ -75,11 +75,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="p-4 sm:p-6 bg-neutral-50/60 border-b md:border-b-0 md:border-r border-neutral-200 flex flex-col justify-between">
             <div>
               {/* Main Image */}
-              <div className="relative aspect-4/3 sm:aspect-square w-full rounded-2xl overflow-hidden bg-neutral-200 border border-neutral-200/80 shadow-xs">
+              <div className="relative aspect-4/3 sm:aspect-square w-full rounded-2xl overflow-hidden bg-gradient-to-b from-neutral-100 to-neutral-200/60 border border-neutral-200/80 shadow-xs flex items-center justify-center p-3">
                 <img
                   src={images[activeImageIndex]}
                   alt={`${product.name} - foto ${activeImageIndex + 1}`}
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-contain object-center drop-shadow-[0_12px_24px_rgba(0,0,0,0.1)]"
                 />
 
                 {/* Condition pill */}
@@ -98,13 +98,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => setActiveImageIndex(idx)}
-                      className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border-2 transition-all ${
+                      className={`relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border-2 bg-neutral-100 transition-all ${
                         activeImageIndex === idx
                           ? 'border-neutral-900 ring-2 ring-neutral-900/10'
                           : 'border-transparent opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <img src={img} alt={`thumb ${idx}`} className="w-full h-full object-cover" />
+                      <img src={img} alt={`thumb ${idx}`} className="w-full h-full object-contain p-1" />
                     </button>
                   ))}
                 </div>

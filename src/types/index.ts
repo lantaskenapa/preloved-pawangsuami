@@ -49,6 +49,7 @@ export interface StoreSettings {
   return_policy: string;
   supabase_url?: string;
   supabase_anon_key?: string;
+  gemini_api_key?: string;
   updated_at: string;
 }
 
