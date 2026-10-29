@@ -19,8 +19,10 @@ import {
   XCircle,
   Sparkles,
   Wand2,
+  Crop,
 } from 'lucide-react';
 import { executeMagicThumbnail } from '../../lib/magicThumbnail';
+import { ImageCropAdjustModal } from './ImageCropAdjustModal';
 import { useToast } from '../ui/Toast';
 
 interface ProductFormModalProps {
@@ -63,6 +65,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [compressionStatus, setCompressionStatus] = useState<string | null>(null);
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null);
   const [dragOverImageIndex, setDragOverImageIndex] = useState<number | null>(null);
+  const [adjustingImageIndex, setAdjustingImageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (productToEdit) {
@@ -268,6 +271,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
     setSaving(true);
     try {
+      const finalCompleteness = [...completenessList];
+      if (completenessInput.trim() && !finalCompleteness.includes(completenessInput.trim())) {
+        finalCompleteness.push(completenessInput.trim());
+      }
+
+      const finalMinusPoints = [...minusPointsList];
+      if (minusPointInput.trim() && !finalMinusPoints.includes(minusPointInput.trim())) {
+        finalMinusPoints.push(minusPointInput.trim());
+      }
+
       await onSave({
         id: productToEdit?.id,
         name: name.trim(),
@@ -279,8 +292,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         shopee_url: shopeeUrl.trim(),
         status,
         images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
-        completeness: completenessList,
-        minus_points: minusPointsList,
+        completeness: finalCompleteness,
+        minus_points: finalMinusPoints,
         is_featured: isFeatured,
       });
       showToast(productToEdit ? 'Produk berhasil diperbarui!' : 'Produk baru berhasil ditambahkan!', 'success');
@@ -576,8 +589,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <div className="space-y-2 pt-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-neutral-500 font-medium gap-1 bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
                   <span className="flex items-center gap-1.5 text-neutral-700">
-                    <GripVertical className="w-4 h-4 text-neutral-400 shrink-0" />
-                    <span><strong>Geser / Drag</strong> kartu foto untuk atur urutan. Foto urutan pertama otomatis jadi <strong>Thumbnail Utama</strong>.</span>
+                    <Crop className="w-4 h-4 text-neutral-500 shrink-0" />
+                    <span><strong>Klik foto</strong> untuk atur posisi/geser framing thumbnail. <strong>Tarik (drag)</strong> untuk ubah urutan.</span>
                   </span>
                   <span className="shrink-0 font-bold text-neutral-600">{images.length} foto terpilih</span>
                 </div>
@@ -609,13 +622,15 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           e.preventDefault();
                           handleDropImage(index);
                         }}
-                        className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-white shadow-2xs transition-all cursor-grab active:cursor-grabbing select-none ${
+                        onClick={() => setAdjustingImageIndex(index)}
+                        className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-white shadow-2xs transition-all cursor-pointer select-none ${
                           isThumbnail
                             ? 'border-neutral-900 ring-2 ring-neutral-900/10'
                             : isDragOver
                               ? 'border-blue-500 scale-105'
                               : 'border-neutral-200 hover:border-neutral-400'
                         } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
+                        title="Klik foto untuk mengatur posisi framing thumbnail"
                       >
                         <div className="w-full h-full bg-neutral-100">
                           <img
@@ -623,6 +638,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             alt={`foto ${index + 1}`}
                             className="w-full h-full object-cover object-center pointer-events-none"
                           />
+
+                          {/* Center overlay button hinting click to crop/adjust */}
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none z-5">
+                            <span className="px-2 py-1 rounded-lg bg-neutral-900/90 text-white text-[10px] font-bold shadow-md flex items-center gap-1.5 backdrop-blur-xs border border-white/20">
+                              <Crop className="w-3 h-3 text-amber-400" />
+                              <span>Atur Posisi</span>
+                            </span>
+                          </div>
                         </div>
 
                         {/* Top Badges */}
@@ -904,6 +927,26 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
         </form>
       </div>
+
+      {/* Modal Adjuster Posisi / Crop Foto Thumbnail */}
+      {adjustingImageIndex !== null && images[adjustingImageIndex] && (
+        <ImageCropAdjustModal
+          isOpen={true}
+          imageUrl={images[adjustingImageIndex]}
+          imageIndex={adjustingImageIndex}
+          isThumbnail={adjustingImageIndex === 0}
+          onClose={() => setAdjustingImageIndex(null)}
+          onApply={(adjustedDataUrl) => {
+            setImages((prev) => {
+              const copy = [...prev];
+              copy[adjustingImageIndex] = adjustedDataUrl;
+              return copy;
+            });
+            setAdjustingImageIndex(null);
+            showToast('Posisi foto berhasil disesuaikan untuk thumbnail!', 'success');
+          }}
+        />
+      )}
     </div>
   );
 };
