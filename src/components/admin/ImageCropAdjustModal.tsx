@@ -16,6 +16,8 @@ interface ImageCropAdjustModalProps {
   isThumbnail: boolean;
   onClose: () => void;
   onApply: (adjustedDataUrl: string) => void;
+  onResetToInitial?: () => void;
+  hasBeenAdjusted?: boolean;
 }
 
 export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
@@ -25,6 +27,8 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
   isThumbnail,
   onClose,
   onApply,
+  onResetToInitial,
+  hasBeenAdjusted,
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -39,18 +43,39 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
 
   const VIEWPORT_SIZE = 300; // 300x300px square frame
 
-  // Reset when modal opens with a new image
+  // Ensure natural dimensions are accurately probed immediately, even if cached in browser
   useEffect(() => {
-    if (isOpen) {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-      setRotation(0);
-      setIsDragging(false);
+    if (!isOpen || !imageUrl) return;
+
+    // Reset transform to initial uncropped state every time modal opens
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setRotation(0);
+    setIsDragging(false);
+
+    // Active image probe to guarantee naturalWidth & naturalHeight are available immediately
+    const probe = new Image();
+    probe.onload = () => {
+      if (probe.naturalWidth && probe.naturalHeight) {
+        setImgNaturalSize({
+          width: probe.naturalWidth,
+          height: probe.naturalHeight,
+        });
+      }
+    };
+    probe.src = imageUrl;
+
+    // Fallback if ref already has dimensions
+    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
+      setImgNaturalSize({
+        width: imgRef.current.naturalWidth,
+        height: imgRef.current.naturalHeight,
+      });
     }
   }, [isOpen, imageUrl]);
 
   const handleImageLoad = () => {
-    if (imgRef.current) {
+    if (imgRef.current && imgRef.current.naturalWidth) {
       setImgNaturalSize({
         width: imgRef.current.naturalWidth,
         height: imgRef.current.naturalHeight,
@@ -162,15 +187,18 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomDelta = e.deltaY * -0.0015;
-    setZoom((prev) => Math.min(3, Math.max(1, prev + zoomDelta)));
+    setZoom((prev) => Math.min(3, Math.max(0.5, prev + zoomDelta)));
   };
 
-  // Apply & Crop to 1000x1000 canvas with exact Pan, Zoom, and Rotation
+  // Apply & Crop to canvas matching the initial high resolution of the image
   const handleApplyCrop = () => {
     if (!imgRef.current) return;
 
     const canvas = document.createElement('canvas');
-    const OUTPUT_SIZE = 1000; // 1000x1000 High resolution output
+    // Maintain maximum crisp resolution: at least 1200px or up to initial natural dimension
+    const naturalDimension = Math.max(imgNaturalSize.width || 0, imgNaturalSize.height || 0);
+    const OUTPUT_SIZE = Math.max(1200, Math.min(2400, naturalDimension || 1200));
+
     canvas.width = OUTPUT_SIZE;
     canvas.height = OUTPUT_SIZE;
     const ctx = canvas.getContext('2d');
@@ -204,7 +232,8 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     );
     ctx.restore();
 
-    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    // High quality JPEG (0.92) to maintain maximum crispness and detail
+    const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
     onApply(croppedDataUrl);
   };
 
@@ -360,15 +389,15 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
             <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-neutral-200/90 shadow-2xs">
               <button
                 type="button"
-                onClick={() => setZoom((z) => Math.max(1, z - 0.15))}
-                className="p-1 rounded-md text-neutral-500 hover:text-neutral-900"
-                title="Perkecil zoom"
+                onClick={() => setZoom((z) => Math.max(0.5, z - 0.15))}
+                className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 cursor-pointer"
+                title="Perkecil zoom (zoom out ke resolusi penuh)"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
               </button>
               <input
                 type="range"
-                min="1"
+                min="0.5"
                 max="3"
                 step="0.05"
                 value={zoom}
@@ -378,7 +407,7 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
               <button
                 type="button"
                 onClick={() => setZoom((z) => Math.min(3, z + 0.15))}
-                className="p-1 rounded-md text-neutral-500 hover:text-neutral-900"
+                className="p-1 rounded-md text-neutral-500 hover:text-neutral-900 cursor-pointer"
                 title="Perbesar zoom"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -391,19 +420,32 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-5 border-t border-neutral-200 flex items-center justify-between gap-3 bg-white">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-neutral-300 text-xs sm:text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
-          >
-            Batal
-          </button>
+        <div className="p-4 sm:p-5 border-t border-neutral-200 flex flex-wrap items-center justify-between gap-2.5 bg-white">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-neutral-300 text-xs sm:text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
+            >
+              Batal
+            </button>
+            {onResetToInitial && (
+              <button
+                type="button"
+                onClick={onResetToInitial}
+                className="px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Kembalikan foto ke resolusi dan tampilan uncropped saat pertama diunggah"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-neutral-500" />
+                <span>Reset ke Foto Awal</span>
+              </button>
+            )}
+          </div>
 
           <button
             type="button"
             onClick={handleApplyCrop}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-98"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-2 sm:py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-98 cursor-pointer"
           >
             <Check className="w-4 h-4 text-emerald-400" />
             <span>Terapkan Posisi Ini</span>

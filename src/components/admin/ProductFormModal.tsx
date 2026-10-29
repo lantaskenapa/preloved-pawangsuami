@@ -53,6 +53,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [shopeeUrl, setShopeeUrl] = useState('');
   const [status, setStatus] = useState<ProductStatus>('published');
   const [images, setImages] = useState<string[]>([]);
+  // Keep original uncropped high-resolution images so re-adjusting opens the initial resolution photo
+  const [originalImages, setOriginalImages] = useState<string[]>([]);
+  // Active photo for mobile tap without needing hover
+  const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
   const [isMagicLoading, setIsMagicLoading] = useState(false);
   const [magicTargetIndex, setMagicTargetIndex] = useState<number | null>(null);
   const [completenessInput, setCompletenessInput] = useState('');
@@ -78,6 +82,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setShopeeUrl(productToEdit.shopee_url);
       setStatus(productToEdit.status);
       setImages(productToEdit.images || []);
+      setOriginalImages(
+        productToEdit.original_images && productToEdit.original_images.length > 0
+          ? [...productToEdit.original_images]
+          : (productToEdit.images ? [...productToEdit.images] : [])
+      );
+      setActivePhotoIndex(null);
       setCompletenessList(productToEdit.completeness || []);
       setMinusPointsList(productToEdit.minus_points || []);
       setIsFeatured(!!productToEdit.is_featured);
@@ -91,6 +101,8 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setShopeeUrl('https://shopee.co.id');
       setStatus('published');
       setImages([]);
+      setOriginalImages([]);
+      setActivePhotoIndex(null);
       setCompletenessList(['Unit Original', 'Box Bawaan']);
       setMinusPointsList([]);
       setIsFeatured(false);
@@ -107,6 +119,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     const fileList = Array.from(files);
     setIsCompressing(true);
     let successCount = 0;
+    const newUploadedImages: string[] = [];
 
     for (let i = 0; i < fileList.length; i++) {
       const file = fileList[i];
@@ -115,17 +128,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         const result = await compressImageFile(file, {
           maxWidth: 1200,
           maxHeight: 1200,
-          quality: 0.82,
+          quality: 0.85,
         });
-        setImages((prev) => [...prev, result.dataUrl]);
+        newUploadedImages.push(result.dataUrl);
         successCount++;
       } catch (err: any) {
         showToast(err?.message || `Gagal memproses file ${file.name}`, 'error');
       }
     }
 
-    if (successCount > 0) {
-      showToast(`${successCount} foto berhasil dioptimasi & ditambahkan!`, 'success');
+    if (newUploadedImages.length > 0) {
+      const initialUploadIndex = images.length;
+      setImages((prev) => [...prev, ...newUploadedImages]);
+      setOriginalImages((prev) => [...prev, ...newUploadedImages]);
+      // On mobile, automatically activate newly uploaded photo so Atur and Delete buttons are immediately visible without hover!
+      setActivePhotoIndex(initialUploadIndex);
+      showToast(`${successCount} foto berhasil ditambahkan! Tombol Atur & Hapus langsung aktif.`, 'success');
     }
 
     setIsCompressing(false);
@@ -153,6 +171,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           copy[targetIndex] = result.transparentImageUrl!;
           return copy;
         });
+        setOriginalImages((prev) => {
+          const copy = [...prev];
+          copy[targetIndex] = result.transparentImageUrl!;
+          return copy;
+        });
+        setActivePhotoIndex(targetIndex);
         const methodDesc = result.method === 'imgly'
           ? 'AI Browser (Imgly)'
           : `Remove.bg${result.totalKeys && result.totalKeys > 1 && (result.keyIndex ?? 0) > 0 ? ` (Key #${(result.keyIndex ?? 0) + 1})` : ''}`;
@@ -185,12 +209,20 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setIsFeatured(!!target.is_featured);
     if (target.images && target.images.length > 0) {
       setImages([...target.images]);
+      setOriginalImages([...target.images]);
+      setActivePhotoIndex(0);
     }
     showToast(`Data produk berhasil disalin dari "${target.name}"!`, 'info');
   };
 
   const handleRemoveImage = (index: number) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+    setOriginalImages((prev) => prev.filter((_, i) => i !== index));
+    if (activePhotoIndex === index) {
+      setActivePhotoIndex(null);
+    } else if (activePhotoIndex !== null && activePhotoIndex > index) {
+      setActivePhotoIndex(activePhotoIndex - 1);
+    }
   };
 
   const handleSetThumbnail = (index: number) => {
@@ -201,6 +233,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       copy.unshift(chosen);
       return copy;
     });
+    setOriginalImages((prev) => {
+      const copy = [...prev];
+      const [chosen] = copy.splice(index, 1);
+      copy.unshift(chosen);
+      return copy;
+    });
+    setActivePhotoIndex(0);
     showToast('Foto berhasil dijadikan Thumbnail Utama!', 'info');
   };
 
@@ -214,6 +253,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       copy[toIndex] = temp;
       return copy;
     });
+    setOriginalImages((prev) => {
+      const copy = [...prev];
+      const temp = copy[fromIndex];
+      copy[fromIndex] = copy[toIndex];
+      copy[toIndex] = temp;
+      return copy;
+    });
+    setActivePhotoIndex(toIndex);
   };
 
   const handleDropImage = (toIndex: number) => {
@@ -228,6 +275,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       copy.splice(toIndex, 0, moved);
       return copy;
     });
+    setOriginalImages((prev) => {
+      const copy = [...prev];
+      const [moved] = copy.splice(draggedImageIndex, 1);
+      copy.splice(toIndex, 0, moved);
+      return copy;
+    });
+    setActivePhotoIndex(toIndex);
     setDraggedImageIndex(null);
     setDragOverImageIndex(null);
     showToast(toIndex === 0 ? 'Foto berhasil dijadikan Thumbnail Utama!' : 'Urutan foto diperbarui!', 'info');
@@ -292,6 +346,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         shopee_url: shopeeUrl.trim(),
         status,
         images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
+        original_images: originalImages.length > 0 ? originalImages : images,
         completeness: finalCompleteness,
         minus_points: finalMinusPoints,
         is_featured: isFeatured,
@@ -622,106 +677,116 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                           e.preventDefault();
                           handleDropImage(index);
                         }}
-                        onClick={() => setAdjustingImageIndex(index)}
+                        onClick={() => {
+                          // Clicking photo directly opens adjust modal (no hover needed)
+                          setAdjustingImageIndex(index);
+                        }}
                         className={`relative group rounded-2xl overflow-hidden aspect-square border-2 bg-white shadow-2xs transition-all cursor-pointer select-none ${
                           isThumbnail
-                            ? 'border-neutral-900 ring-2 ring-neutral-900/10'
+                            ? 'border-neutral-900 ring-2 ring-neutral-900/15'
                             : isDragOver
                               ? 'border-blue-500 scale-105'
                               : 'border-neutral-200 hover:border-neutral-400'
                         } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                         title="Klik foto untuk mengatur posisi framing thumbnail"
                       >
+                        {/* Clean Image without dimming overlay */}
                         <div className="w-full h-full bg-neutral-100">
                           <img
                             src={img}
                             alt={`foto ${index + 1}`}
                             className="w-full h-full object-cover object-center pointer-events-none"
                           />
-
-                          {/* Center overlay button hinting click to crop/adjust */}
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 pointer-events-none z-5">
-                            <span className="px-2 py-1 rounded-lg bg-neutral-900/90 text-white text-[10px] font-bold shadow-md flex items-center gap-1.5 backdrop-blur-xs border border-white/20">
-                              <Crop className="w-3 h-3 text-amber-400" />
-                              <span>Atur Posisi</span>
-                            </span>
-                          </div>
                         </div>
 
                         {/* Top Badges */}
-                        <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none z-10">
+                        <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none z-20">
                           {isThumbnail ? (
                             <span className="px-2 py-0.5 rounded-lg bg-neutral-950/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/20 backdrop-blur-xs">
                               <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
                               <span>Thumbnail</span>
                             </span>
                           ) : (
-                            <span className="w-5 h-5 rounded-md bg-neutral-900/70 text-white text-[10px] font-bold flex items-center justify-center backdrop-blur-xs">
+                            <span className="w-5 h-5 rounded-md bg-neutral-900/75 text-white text-[10px] font-bold flex items-center justify-center backdrop-blur-xs">
                               {index + 1}
                             </span>
                           )}
 
-                          {/* Delete button */}
+                          {/* Tombol Hapus (ALWAYS VISIBLE ON MOBILE without hover) */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleRemoveImage(index);
                             }}
-                            className="p-1 rounded-lg bg-red-600/90 hover:bg-red-700 text-white shadow-sm pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="p-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-md pointer-events-auto transition-transform active:scale-90 cursor-pointer flex items-center justify-center opacity-100 sm:opacity-90 sm:hover:opacity-100"
                             title="Hapus foto ini"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        {/* Bottom Actions: Quick Reorder / Set as Thumbnail / Magic Cutout */}
-                        <div className="absolute bottom-1.5 inset-x-1.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                          {/* Move Left Button */}
-                          {index > 0 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveImage(index, 'left');
-                              }}
-                              className="p-1 rounded-md bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer"
-                              title="Pindahkan ke kiri"
-                            >
-                              <ChevronLeft className="w-3 h-3" />
-                            </button>
-                          )}
+                        {/* Bottom Actions Bar (ALWAYS VISIBLE ON MOBILE without hover) */}
+                        <div className="absolute bottom-1.5 inset-x-1.5 flex items-center justify-between gap-1 z-20">
+                          {/* Tombol Atur Foto (ALWAYS VISIBLE ON MOBILE without hover) */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAdjustingImageIndex(index);
+                            }}
+                            className="px-2 py-1 rounded-lg bg-neutral-900/90 hover:bg-black text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-md border border-white/25 active:scale-95 cursor-pointer pointer-events-auto transition-transform"
+                            title="Atur framing, zoom & rotasi foto"
+                          >
+                            <Crop className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span>Atur</span>
+                          </button>
 
-                          {/* Set as Thumbnail */}
-                          {!isThumbnail && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSetThumbnail(index);
-                              }}
-                              className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
-                              title="Jadikan foto ini Thumbnail Utama"
-                            >
-                              <Star className="w-2.5 h-2.5 text-amber-400" />
-                              <span className="truncate">Jadikan Sampul</span>
-                            </button>
-                          )}
+                          {/* Quick Reorder & Sampul Actions */}
+                          <div className="flex items-center gap-1">
+                            {!isThumbnail && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSetThumbnail(index);
+                                }}
+                                className="px-1.5 py-1 rounded-lg bg-neutral-900/80 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center gap-1 cursor-pointer active:scale-95 pointer-events-auto"
+                                title="Jadikan Sampul"
+                              >
+                                <Star className="w-2.5 h-2.5 text-amber-400" />
+                                <span className="hidden xs:inline">Sampul</span>
+                              </button>
+                            )}
 
-                          {/* Move Right Button */}
-                          {index < images.length - 1 && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveImage(index, 'right');
-                              }}
-                              className="p-1 rounded-md bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer"
-                              title="Pindahkan ke kanan"
-                            >
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
-                          )}
+                            {index > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveImage(index, 'left');
+                                }}
+                                className="p-1 rounded-lg bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer active:scale-95 pointer-events-auto"
+                                title="Geser ke kiri"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            {index < images.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveImage(index, 'right');
+                                }}
+                                className="p-1 rounded-lg bg-neutral-900/80 hover:bg-neutral-900 text-white text-[10px] shadow-sm backdrop-blur-xs cursor-pointer active:scale-95 pointer-events-auto"
+                                title="Geser ke kanan"
+                              >
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                       </div>
@@ -899,17 +964,30 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       {/* Modal Adjuster Posisi / Crop Foto Thumbnail */}
       {adjustingImageIndex !== null && images[adjustingImageIndex] && (
         <ImageCropAdjustModal
+          key={`crop-modal-${adjustingImageIndex}`}
           isOpen={true}
-          imageUrl={images[adjustingImageIndex]}
+          imageUrl={originalImages[adjustingImageIndex] || images[adjustingImageIndex]}
           imageIndex={adjustingImageIndex}
           isThumbnail={adjustingImageIndex === 0}
+          hasBeenAdjusted={Boolean(originalImages[adjustingImageIndex] && originalImages[adjustingImageIndex] !== images[adjustingImageIndex])}
           onClose={() => setAdjustingImageIndex(null)}
+          onResetToInitial={() => {
+            const initialImg = originalImages[adjustingImageIndex] || images[adjustingImageIndex];
+            setImages((prev) => {
+              const copy = [...prev];
+              copy[adjustingImageIndex] = initialImg;
+              return copy;
+            });
+            setAdjustingImageIndex(null);
+            showToast('Foto dikembalikan ke resolusi dan tampilan uncropped awal!', 'success');
+          }}
           onApply={(adjustedDataUrl) => {
             setImages((prev) => {
               const copy = [...prev];
               copy[adjustingImageIndex] = adjustedDataUrl;
               return copy;
             });
+            // Note: originalImages[adjustingImageIndex] remains untouched so any future adjustment will still start from the initial resolution image!
             setAdjustingImageIndex(null);
             showToast('Posisi foto berhasil disesuaikan untuk thumbnail!', 'success');
           }}

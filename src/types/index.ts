@@ -18,6 +18,7 @@ export interface Product {
   completeness: string[]; // e.g. ["Box Original", "Kabel Bawaan", "Nota Pembelian"]
   minus_points?: string[]; // Poin-poin minus fisik / pemakaian
   images: string[];
+  original_images?: string[]; // Preserves initial uploaded uncropped high-resolution photos
   shopee_url: string;
   status: ProductStatus;
   is_featured?: boolean;

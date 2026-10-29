@@ -227,12 +227,16 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
     if (index === -1) throw new Error('Produk tidak ditemukan');
 
     const cleanSlug = productInput.slug || generateUniqueSlug(productInput.name, currentList, productInput.id);
+    const rawOriginals = productInput.original_images && productInput.original_images.length > 0
+      ? productInput.original_images
+      : (currentList[index]?.original_images || processedImages);
 
     savedProduct = {
       ...currentList[index],
       ...productInput,
       slug: cleanSlug,
       images: processedImages,
+      original_images: rawOriginals,
       updated_at: now,
     } as Product;
     currentList[index] = savedProduct;
@@ -254,6 +258,7 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
       completeness: productInput.completeness || [],
       minus_points: productInput.minus_points || [],
       images: processedImages,
+      original_images: productInput.original_images && productInput.original_images.length > 0 ? productInput.original_images : processedImages,
       shopee_url: productInput.shopee_url || 'https://shopee.co.id',
       status: productInput.status || 'published',
       is_featured: !!productInput.is_featured,
