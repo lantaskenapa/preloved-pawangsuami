@@ -187,11 +187,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     }`}>
                       {formatIDR(product.price)}
                     </span>
-                    <p className="text-xs text-neutral-600 mt-0.5">
-                      {product.status === 'sold'
-                        ? 'Harga laku terjual via Shopee'
-                        : 'Harga preloved via Shopee (Bisa klaim Gratis Ongkir & Voucher Diskon)'}
-                    </p>
+                    {product.status === 'sold' && (
+                      <p className="text-xs text-neutral-600 mt-0.5">
+                        Harga laku terjual via Shopee
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
