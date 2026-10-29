@@ -33,6 +33,7 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0); // 0, 90, 180, 270 degrees
+  const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain'); // 'contain' displays 100% of uncropped original photo
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
@@ -48,6 +49,7 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     if (!isOpen || !imageUrl) return;
 
     // Reset transform to initial uncropped state every time modal opens
+    setFitMode('contain');
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setRotation(0);
@@ -83,17 +85,25 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     }
   };
 
-  // Calculate base scale to ensure image covers the 1:1 viewport, accounting for rotation
+  // Calculate base scale: 'contain' shows 100% of the uncropped photo, 'cover' fills 1:1 square
   const getBaseScale = useCallback(() => {
     if (!imgNaturalSize.width || !imgNaturalSize.height) return 1;
     const isSwapped = rotation % 180 !== 0;
     const effWidth = isSwapped ? imgNaturalSize.height : imgNaturalSize.width;
     const effHeight = isSwapped ? imgNaturalSize.width : imgNaturalSize.height;
+
+    if (fitMode === 'contain') {
+      return Math.min(
+        VIEWPORT_SIZE / effWidth,
+        VIEWPORT_SIZE / effHeight
+      );
+    }
+
     return Math.max(
       VIEWPORT_SIZE / effWidth,
       VIEWPORT_SIZE / effHeight
     );
-  }, [imgNaturalSize, rotation]);
+  }, [imgNaturalSize, rotation, fitMode]);
 
   // Max drag bounds
   const getPanBounds = useCallback(() => {
@@ -273,11 +283,43 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
 
         {/* Framing Canvas / Viewport */}
         <div className="p-4 sm:p-6 flex flex-col items-center bg-neutral-100/50">
-          <div className="text-center mb-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white text-[11px] font-semibold text-neutral-600 shadow-2xs border border-neutral-200/80">
-              <Move className="w-3.5 h-3.5 text-neutral-400" />
-              <span>Klik & geser (drag) foto untuk framing thumbnail</span>
-            </span>
+          {/* Fit Mode Toggle: Foto Utuh (No crop) vs Penuhi Kotak (Cover) */}
+          <div className="flex items-center justify-between w-full max-w-[300px] mb-3">
+            <span className="text-[11px] font-bold text-neutral-600">Framing:</span>
+            <div className="flex items-center bg-white p-0.5 rounded-xl border border-neutral-200/90 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode('contain');
+                  setZoom(1);
+                  setPan({ x: 0, y: 0 });
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  fitMode === 'contain'
+                    ? 'bg-neutral-900 text-white shadow-xs'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+                title="Tampilkan 100% foto sebelum di-crop secara utuh"
+              >
+                Foto Utuh (Sebelum Crop)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode('cover');
+                  setZoom(1);
+                  setPan({ x: 0, y: 0 });
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  fitMode === 'cover'
+                    ? 'bg-neutral-900 text-white shadow-xs'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                }`}
+                title="Penuhi bingkai kotak 1:1"
+              >
+                Penuhi Kotak
+              </button>
+            </div>
           </div>
 
           {/* Square Viewport */}
@@ -292,7 +334,7 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
             onTouchEnd={onTouchEnd}
             onWheel={onWheel}
             style={{ width: `${VIEWPORT_SIZE}px`, height: `${VIEWPORT_SIZE}px` }}
-            className={`relative rounded-2xl overflow-hidden bg-neutral-900 select-none shadow-md border-2 border-neutral-800 ${
+            className={`relative rounded-2xl overflow-hidden bg-white select-none shadow-md border-2 border-neutral-300 ring-1 ring-neutral-200 ${
               isDragging ? 'cursor-grabbing' : 'cursor-grab'
             }`}
           >
@@ -323,20 +365,20 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
             />
 
             {/* Rule of thirds grid lines overlay */}
-            <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-white/30">
-              <div className="border-r border-b border-white/20" />
-              <div className="border-r border-b border-white/20" />
-              <div className="border-b border-white/20" />
-              <div className="border-r border-b border-white/20" />
-              <div className="border-r border-b border-white/20" />
-              <div className="border-b border-white/20" />
-              <div className="border-r border-white/20" />
-              <div className="border-r border-white/20" />
+            <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-neutral-400/25">
+              <div className="border-r border-b border-neutral-400/20" />
+              <div className="border-r border-b border-neutral-400/20" />
+              <div className="border-b border-neutral-400/20" />
+              <div className="border-r border-b border-neutral-400/20" />
+              <div className="border-r border-b border-neutral-400/20" />
+              <div className="border-b border-neutral-400/20" />
+              <div className="border-r border-neutral-400/20" />
+              <div className="border-r border-neutral-400/20" />
               <div />
             </div>
 
             {/* Corner boundary guides */}
-            <div className="absolute inset-2 border border-white/40 rounded-xl pointer-events-none" />
+            <div className="absolute inset-2 border border-neutral-400/35 rounded-xl pointer-events-none" />
           </div>
 
           {/* Controls: Rotate, Zoom & Quick Positions */}
@@ -374,14 +416,16 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setFitMode('contain');
                   setZoom(1);
                   setPan({ x: 0, y: 0 });
                   setRotation(0);
                 }}
-                className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-400 hover:text-neutral-700 transition-colors"
-                title="Reset Posisi, Zoom & Rotasi"
+                className="px-2 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 active:scale-95 text-neutral-700 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                title="Reset Posisi, Zoom & Rotasi ke Resolusi Utuh Awal"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-3.5 h-3.5 text-neutral-500" />
+                <span>Reset</span>
               </button>
             </div>
 
@@ -433,11 +477,11 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
               <button
                 type="button"
                 onClick={onResetToInitial}
-                className="px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-neutral-200 bg-neutral-50 hover:bg-neutral-100 text-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                 title="Kembalikan foto ke resolusi dan tampilan uncropped saat pertama diunggah"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-neutral-500" />
-                <span>Reset ke Foto Awal</span>
+                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                <span>Foto Asli (Sebelum Crop)</span>
               </button>
             )}
           </div>

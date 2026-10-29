@@ -289,6 +289,7 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
         completeness: savedProduct.completeness || [],
         minus_points: savedProduct.minus_points || [],
         images: savedProduct.images || [],
+        original_images: savedProduct.original_images || savedProduct.images || [],
         shopee_url: savedProduct.shopee_url,
         status: savedProduct.status || 'published',
         is_featured: !!savedProduct.is_featured,

@@ -20,6 +20,7 @@ import {
   Sparkles,
   Wand2,
   Crop,
+  RotateCcw,
 } from 'lucide-react';
 import { executeMagicThumbnail } from '../../lib/magicThumbnail';
 import { ImageCropAdjustModal } from './ImageCropAdjustModal';
@@ -223,6 +224,17 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     } else if (activePhotoIndex !== null && activePhotoIndex > index) {
       setActivePhotoIndex(activePhotoIndex - 1);
     }
+  };
+
+  const handleResetImageToOriginal = (index: number) => {
+    const original = originalImages[index];
+    if (!original) return;
+    setImages((prev) => {
+      const copy = [...prev];
+      copy[index] = original;
+      return copy;
+    });
+    showToast('Foto berhasil dikembalikan ke foto asli sebelum di-crop!', 'success');
   };
 
   const handleSetThumbnail = (index: number) => {
@@ -655,6 +667,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     const isThumbnail = index === 0;
                     const isDragging = draggedImageIndex === index;
                     const isDragOver = dragOverImageIndex === index;
+                    const isCropped = Boolean(originalImages[index] && originalImages[index] !== img);
 
                     return (
                       <div
@@ -701,16 +714,23 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                         {/* Top Badges */}
                         <div className="absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none z-20">
-                          {isThumbnail ? (
-                            <span className="px-2 py-0.5 rounded-lg bg-neutral-950/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/20 backdrop-blur-xs">
-                              <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                              <span>Thumbnail</span>
-                            </span>
-                          ) : (
-                            <span className="w-5 h-5 rounded-md bg-neutral-900/75 text-white text-[10px] font-bold flex items-center justify-center backdrop-blur-xs">
-                              {index + 1}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {isThumbnail ? (
+                              <span className="px-2 py-0.5 rounded-lg bg-neutral-950/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 border border-white/20 backdrop-blur-xs">
+                                <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                                <span>Thumbnail</span>
+                              </span>
+                            ) : (
+                              <span className="w-5 h-5 rounded-md bg-neutral-900/75 text-white text-[10px] font-bold flex items-center justify-center backdrop-blur-xs">
+                                {index + 1}
+                              </span>
+                            )}
+                            {isCropped && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/90 text-white text-[8px] font-extrabold uppercase tracking-wide shadow-xs border border-white/20 backdrop-blur-xs">
+                                Tercrop
+                              </span>
+                            )}
+                          </div>
 
                           {/* Tombol Hapus (ALWAYS VISIBLE ON MOBILE without hover) */}
                           <button
@@ -728,19 +748,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
                         {/* Bottom Actions Bar (ALWAYS VISIBLE ON MOBILE without hover) */}
                         <div className="absolute bottom-1.5 inset-x-1.5 flex items-center justify-between gap-1 z-20">
-                          {/* Tombol Atur Foto (ALWAYS VISIBLE ON MOBILE without hover) */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAdjustingImageIndex(index);
-                            }}
-                            className="px-2 py-1 rounded-lg bg-neutral-900/90 hover:bg-black text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-md border border-white/25 active:scale-95 cursor-pointer pointer-events-auto transition-transform"
-                            title="Atur framing, zoom & rotasi foto"
-                          >
-                            <Crop className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span>Atur</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {/* Tombol Atur Foto (ALWAYS VISIBLE ON MOBILE without hover) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAdjustingImageIndex(index);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-neutral-900/90 hover:bg-black text-white text-[10px] font-bold shadow-md flex items-center gap-1 backdrop-blur-md border border-white/25 active:scale-95 cursor-pointer pointer-events-auto transition-transform"
+                              title="Atur framing, zoom & rotasi foto"
+                            >
+                              <Crop className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span>Atur</span>
+                            </button>
+
+                            {/* Tombol Foto Asli jika sudah di-crop (ALWAYS VISIBLE without hover) */}
+                            {isCropped && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleResetImageToOriginal(index);
+                                }}
+                                className="px-1.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-bold shadow-md flex items-center gap-1 backdrop-blur-md border border-white/30 active:scale-95 cursor-pointer pointer-events-auto transition-transform"
+                                title="Kembalikan ke foto asli sebelum di-crop"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5 shrink-0" />
+                                <span>Asli</span>
+                              </button>
+                            )}
+                          </div>
 
                           {/* Quick Reorder & Sampul Actions */}
                           <div className="flex items-center gap-1">
