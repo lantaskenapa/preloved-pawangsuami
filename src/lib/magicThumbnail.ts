@@ -1,9 +1,9 @@
 /**
- * Magic Thumbnail AI - 100% Remove.bg API Background Removal
+ * Magic Thumbnail AI - 100% Remove.bg API with Multi-Key Quota Failover
  * Official API: https://www.remove.bg/api
  *
- * Uses native FormData + fetch with zero external npm dependencies.
- * Zero-fallback policy: Always uses Remove.bg or returns explicit diagnostic errors.
+ * When an API key runs out of quota (HTTP 402 / 429), the engine automatically
+ * fails over to Key #2, Key #3, etc. seamlessly.
  */
 
 export interface MagicThumbnailResult {
@@ -11,35 +11,83 @@ export interface MagicThumbnailResult {
   transparentImageUrl?: string;
   error?: string;
   creditsCharged?: number;
+  keyIndex?: number;
+  totalKeys?: number;
   method?: 'removebg';
 }
 
 /**
- * Retrieves the stored Remove.bg API Key from localStorage or settings cache.
+ * Retrieves the stored list of Remove.bg API Keys from localStorage or settings.
  */
-export function getStoredRemoveBgApiKey(): string {
-  if (typeof window === 'undefined') return '';
+export function getStoredRemoveBgApiKeys(): string[] {
+  if (typeof window === 'undefined') return [];
 
-  // 1. Direct key from localStorage (requested key: psp_removebg_api_key)
-  const directKey = localStorage.getItem('psp_removebg_api_key');
-  if (directKey && directKey.trim()) {
-    return directKey.trim();
-  }
+  const keys: string[] = [];
 
-  // 2. Settings JSON stored by app
+  // 1. Array in localStorage: psp_removebg_api_keys
   try {
-    const rawSettings = localStorage.getItem('psp_settings_v1');
-    if (rawSettings) {
-      const parsed = JSON.parse(rawSettings);
-      if (parsed?.removebg_api_key && typeof parsed.removebg_api_key === 'string' && parsed.removebg_api_key.trim()) {
-        return parsed.removebg_api_key.trim();
+    const rawKeys = localStorage.getItem('psp_removebg_api_keys');
+    if (rawKeys) {
+      const parsed = JSON.parse(rawKeys);
+      if (Array.isArray(parsed)) {
+        for (const k of parsed) {
+          if (typeof k === 'string' && k.trim()) {
+            keys.push(k.trim());
+          }
+        }
       }
     }
   } catch {
     // Ignore JSON parse errors
   }
 
-  return '';
+  // 2. Single or comma/newline-separated key in psp_removebg_api_key
+  const singleKey = localStorage.getItem('psp_removebg_api_key');
+  if (singleKey && singleKey.trim()) {
+    const parts = singleKey.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (!keys.includes(part)) {
+        keys.push(part);
+      }
+    }
+  }
+
+  // 3. App Settings JSON cache
+  try {
+    const rawSettings = localStorage.getItem('psp_settings_v1');
+    if (rawSettings) {
+      const parsed = JSON.parse(rawSettings);
+      if (Array.isArray(parsed?.removebg_api_keys)) {
+        for (const k of parsed.removebg_api_keys) {
+          if (typeof k === 'string' && k.trim() && !keys.includes(k.trim())) {
+            keys.push(k.trim());
+          }
+        }
+      }
+      if (parsed?.removebg_api_key && typeof parsed.removebg_api_key === 'string' && parsed.removebg_api_key.trim()) {
+        const parts = parsed.removebg_api_key.split(/[\n,;]+/).map((s: string) => s.trim()).filter(Boolean);
+        for (const part of parts) {
+          if (!keys.includes(part)) {
+            keys.push(part);
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore parse error
+  }
+
+  return keys;
+}
+
+/**
+ * Save array of Remove.bg API keys to localStorage
+ */
+export function saveStoredRemoveBgApiKeys(keys: string[]): void {
+  if (typeof window === 'undefined') return;
+  const cleanList = keys.map((k) => k.trim()).filter(Boolean);
+  localStorage.setItem('psp_removebg_api_keys', JSON.stringify(cleanList));
+  localStorage.setItem('psp_removebg_api_key', cleanList[0] || '');
 }
 
 /**
@@ -73,37 +121,52 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 /**
  * Parse Remove.bg API error responses into clear Indonesian error messages
  */
-function parseRemoveBgError(status: number, data: any): string {
+function parseRemoveBgError(status: number, data: any): { message: string; isQuota: boolean; isAuth: boolean } {
   let detailMsg = '';
   if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
     const firstErr = data.errors[0];
     detailMsg = firstErr.detail || firstErr.title || '';
   }
 
-  if (status === 401 || detailMsg.toLowerCase().includes('api key') || detailMsg.toLowerCase().includes('auth')) {
-    return 'API Key Remove.bg tidak valid atau salah. Silakan periksa kembali di menu "Pengaturan Toko & DB".';
+  const isAuth = status === 401 || detailMsg.toLowerCase().includes('api key') || detailMsg.toLowerCase().includes('auth');
+  const isQuota = status === 402 || detailMsg.toLowerCase().includes('credits') || detailMsg.toLowerCase().includes('insufficient');
+  const isRateLimit = status === 429 || detailMsg.toLowerCase().includes('rate limit');
+
+  if (isAuth) {
+    return {
+      message: 'API Key tidak valid atau dinonaktifkan',
+      isQuota: false,
+      isAuth: true,
+    };
   }
 
-  if (status === 402 || detailMsg.toLowerCase().includes('credits') || detailMsg.toLowerCase().includes('insufficient')) {
-    return 'Kredit akun Remove.bg Anda telah habis (402 Insufficient Credits). Silakan top up kredit atau gunakan akun Remove.bg lain.';
+  if (isQuota) {
+    return {
+      message: 'Kredit akun habis (402 Insufficient Credits)',
+      isQuota: true,
+      isAuth: false,
+    };
   }
 
-  if (status === 429 || detailMsg.toLowerCase().includes('rate limit')) {
-    return 'Batas frekuensi panggilan Remove.bg terlampaui (429 Rate Limit). Silakan tunggu sebentar dan coba lagi.';
+  if (isRateLimit) {
+    return {
+      message: 'Batas frekuensi panggilan terlampaui (429 Rate Limit)',
+      isQuota: true,
+      isAuth: false,
+    };
   }
 
-  if (detailMsg) {
-    return `Remove.bg Error (${status}): ${detailMsg}`;
-  }
-
-  return `Gagal memproses gambar dengan Remove.bg (Status HTTP ${status}).`;
+  return {
+    message: detailMsg || `Status HTTP ${status}`,
+    isQuota: false,
+    isAuth: false,
+  };
 }
 
 /**
- * Direct call to Remove.bg API (POST https://api.remove.bg/v1.0/removebg)
- * Native implementation using fetch + FormData.
+ * Direct call to Remove.bg API with a specific API key
  */
-async function callRemoveBgDirectly(imageDataUrl: string, apiKey: string): Promise<MagicThumbnailResult> {
+async function callRemoveBgWithKey(imageDataUrl: string, apiKey: string): Promise<MagicThumbnailResult & { isQuotaOrAuthError?: boolean }> {
   try {
     const blob = dataURLtoBlob(imageDataUrl);
     const formData = new FormData();
@@ -134,27 +197,29 @@ async function callRemoveBgDirectly(imageDataUrl: string, apiKey: string): Promi
     }
 
     const errData = await res.json().catch(() => null);
-    const errorText = parseRemoveBgError(res.status, errData);
+    const parsed = parseRemoveBgError(res.status, errData);
 
     return {
       success: false,
-      error: errorText,
+      error: parsed.message,
+      isQuotaOrAuthError: parsed.isQuota || parsed.isAuth,
     };
   } catch (err: any) {
     return {
       success: false,
-      error: `Gagal menghubungi server Remove.bg: ${err?.message || 'Pastikan koneksi internet aktif'}`,
+      error: err?.message || 'Gagal terhubung ke Remove.bg',
+      isQuotaOrAuthError: false,
     };
   }
 }
 
 /**
- * Executes Magic Thumbnail 100% using Remove.bg API.
- * Strict zero-fallback policy: Never falls back to canvas or Gemini Image.
+ * Executes Magic Thumbnail with automatic multi-key failover.
+ * If key #1 runs out of quota or is invalid, automatically fails over to key #2, #3, etc.
  */
 export async function executeMagicThumbnail(
   imageDataUrl: string,
-  explicitApiKey?: string
+  explicitKeys?: string | string[]
 ): Promise<MagicThumbnailResult> {
   if (!imageDataUrl) {
     return {
@@ -163,17 +228,23 @@ export async function executeMagicThumbnail(
     };
   }
 
-  // 1. Determine active Remove.bg API Key
-  let activeApiKey = (explicitApiKey || getStoredRemoveBgApiKey()).trim();
+  // 1. Gather all available keys
+  let keys: string[] = [];
+  if (explicitKeys) {
+    keys = (Array.isArray(explicitKeys) ? explicitKeys : [explicitKeys]).map((k) => k.trim()).filter(Boolean);
+  }
+  if (keys.length === 0) {
+    keys = getStoredRemoveBgApiKeys();
+  }
 
-  // If no API key is set in localStorage or settings, check if server has REMOVEBG_API_KEY
-  if (!activeApiKey) {
+  // If still empty, check server .env backup
+  if (keys.length === 0) {
     try {
       const serverCheck = await fetch('/api/removebg-config');
       if (serverCheck.ok) {
         const configData = await serverCheck.json();
         if (configData?.configured && configData?.apiKey) {
-          activeApiKey = configData.apiKey;
+          keys.push(configData.apiKey);
         }
       }
     } catch {
@@ -181,53 +252,48 @@ export async function executeMagicThumbnail(
     }
   }
 
-  // If still empty, return clear error immediately as required
-  if (!activeApiKey) {
+  if (keys.length === 0) {
     return {
       success: false,
-      error: 'API Key Remove.bg belum diisi. Silakan masukkan API Key di menu "Pengaturan Toko & DB" terlebih dahulu.',
+      error: 'API Key Remove.bg belum diisi. Silakan masukkan minimal 1 API Key di menu "Pengaturan Toko & DB" terlebih dahulu.',
     };
   }
 
-  // 2. Call Remove.bg API directly via native fetch + FormData
-  // If browser direct call encounters an issue, proxy via /api/magic-thumbnail
-  try {
-    const directResult = await callRemoveBgDirectly(imageDataUrl, activeApiKey);
-    if (directResult.success) {
-      return directResult;
+  // 2. Multi-Key Failover Loop
+  const errorLogs: string[] = [];
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const keyPreview = key.length > 8 ? `${key.substring(0, 4)}...${key.substring(key.length - 3)}` : `Key #${i + 1}`;
+
+    const result = await callRemoveBgWithKey(imageDataUrl, key);
+
+    if (result.success && result.transparentImageUrl) {
+      return {
+        ...result,
+        keyIndex: i,
+        totalKeys: keys.length,
+      };
     }
 
-    // If it was an official API error (like 401 invalid key or 402 no credits), return it immediately without proxying
-    if (directResult.error && (directResult.error.includes('401') || directResult.error.includes('402') || directResult.error.includes('Key'))) {
-      return directResult;
+    // Log failure and try next key if quota exceeded or auth failed
+    const failReason = result.error || 'Gagal memproses';
+    errorLogs.push(`Key #${i + 1} (${keyPreview}): ${failReason}`);
+
+    // If there's another key available, continue to next
+    if (i < keys.length - 1) {
+      console.warn(`[Remove.bg Multi-Key] Key #${i + 1} gagal (${failReason}). Mengalihkan ke Key #${i + 2}...`);
     }
-
-    // Try server proxy endpoint if available
-    const proxyRes = await fetch('/api/magic-thumbnail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image: imageDataUrl,
-        apiKey: activeApiKey,
-      }),
-    });
-
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data.success && data.transparentImageUrl) {
-        return {
-          success: true,
-          transparentImageUrl: data.transparentImageUrl,
-          method: 'removebg',
-        };
-      }
-    }
-
-    return directResult;
-  } catch (err: any) {
-    return {
-      success: false,
-      error: `Kendala Remove.bg: ${err?.message || 'Gagal memproses gambar'}`,
-    };
   }
+
+  // All keys failed
+  const isMultiple = keys.length > 1;
+  const summaryMsg = isMultiple
+    ? `Semua ${keys.length} API Key Remove.bg gagal atau kehabisan kuota:\n` + errorLogs.map((e) => `• ${e}`).join('\n')
+    : `Remove.bg Gagal: ${errorLogs[0] || 'Periksa API Key atau sisa kredit Anda di Pengaturan Toko & DB.'}`;
+
+  return {
+    success: false,
+    error: summaryMsg,
+  };
 }

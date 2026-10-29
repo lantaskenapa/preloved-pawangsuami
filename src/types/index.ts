@@ -51,6 +51,7 @@ export interface StoreSettings {
   supabase_anon_key?: string;
   gemini_api_key?: string;
   removebg_api_key?: string;
+  removebg_api_keys?: string[];
   updated_at: string;
 }
 

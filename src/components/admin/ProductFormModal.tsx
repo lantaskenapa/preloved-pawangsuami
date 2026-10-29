@@ -150,7 +150,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           copy[targetIndex] = result.transparentImageUrl!;
           return copy;
         });
-        showToast('✨ Magic Thumbnail berhasil! Background produk telah dihapus menjadi transparan via Remove.bg.', 'success');
+        const keyNote = (result.totalKeys && result.totalKeys > 1 && (result.keyIndex ?? 0) > 0)
+          ? ` (Dialihkan ke Key Cadangan #${(result.keyIndex ?? 0) + 1})`
+          : '';
+        showToast(`✨ Magic Thumbnail berhasil! Background produk telah transparan via Remove.bg${keyNote}.`, 'success');
       } else {
         showToast(result.error || 'Gagal memproses Magic Thumbnail', 'error');
       }

@@ -29,8 +29,12 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  Plus,
+  Trash2,
+  Layers,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { getStoredRemoveBgApiKeys, saveStoredRemoveBgApiKeys } from '../../lib/magicThumbnail';
 
 interface StoreSettingsFormProps {
   settings: StoreSettings;
@@ -63,12 +67,21 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') : '') || permanentConfig.anonKey || ''
   );
 
-  const [removeBgApiKey, setRemoveBgApiKey] = useState(
-    (typeof window !== 'undefined' ? localStorage.getItem('psp_removebg_api_key') : '') || settings.removebg_api_key || ''
+  // Multiple Remove.bg API Keys Pool
+  const initialKeys = getStoredRemoveBgApiKeys();
+  const [removeBgKeys, setRemoveBgKeys] = useState<string[]>(
+    initialKeys.length > 0
+      ? initialKeys
+      : settings.removebg_api_key
+        ? [settings.removebg_api_key]
+        : ['']
   );
-  const [showRemoveBgKey, setShowRemoveBgKey] = useState(false);
-  const [testingRemoveBg, setTestingRemoveBg] = useState(false);
-  const [removeBgTestResult, setRemoveBgTestResult] = useState<{ success: boolean; message: string; credits?: number } | null>(null);
+  const [showKeyMap, setShowKeyMap] = useState<Record<number, boolean>>({});
+  const [testingKeyIndex, setTestingKeyIndex] = useState<number | null>(null);
+  const [isTestingAll, setIsTestingAll] = useState(false);
+  const [keyCredits, setKeyCredits] = useState<
+    Record<number, { success: boolean; total: number; free: number; message: string }>
+  >({});
 
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -77,68 +90,72 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [connectedState, setConnectedState] = useState(isSupabaseConnected());
   const [copiedSql, setCopiedSql] = useState(false);
 
-  React.useEffect(() => {
-    fetch('/api/removebg-config')
-      .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
-      .then((data) => {
-        if (data?.configured && !removeBgApiKey) {
-          setRemoveBgTestResult({
-            success: true,
-            message: `API Key Remove.bg terkonfigurasi di server (${data.apiKey || 'Aktif'}). Siap digunakan untuk Magic Thumbnail.`,
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const handleKeyChange = (index: number, val: string) => {
+    setRemoveBgKeys((prev) => {
+      const copy = [...prev];
+      copy[index] = val;
+      return copy;
+    });
+    setKeyCredits((prev) => {
+      const copy = { ...prev };
+      delete copy[index];
+      return copy;
+    });
+  };
 
-  const handleTestRemoveBgKey = async () => {
-    const cleanKey = removeBgApiKey.trim();
-    if (!cleanKey) {
-      showToast('Masukkan API Key Remove.bg terlebih dahulu', 'error');
+  const handleAddKey = () => {
+    setRemoveBgKeys((prev) => [...prev, '']);
+  };
+
+  const handleRemoveKey = (index: number) => {
+    if (removeBgKeys.length <= 1) {
+      setRemoveBgKeys(['']);
+      setKeyCredits({});
       return;
     }
-    setTestingRemoveBg(true);
-    setRemoveBgTestResult(null);
+    setRemoveBgKeys((prev) => prev.filter((_, i) => i !== index));
+    setKeyCredits((prev) => {
+      const updated: Record<number, any> = {};
+      Object.keys(prev).forEach((k) => {
+        const num = Number(k);
+        if (num < index) updated[num] = prev[num];
+        else if (num > index) updated[num - 1] = prev[num];
+      });
+      return updated;
+    });
+  };
 
+  const checkSingleKeyCredits = async (
+    key: string
+  ): Promise<{ success: boolean; total: number; free: number; message: string }> => {
+    const cleanKey = key.trim();
+    if (!cleanKey) {
+      return { success: false, total: 0, free: 0, message: 'API key kosong' };
+    }
     try {
-      // 1. Test directly with official Remove.bg Account API
       const rbgRes = await fetch('https://api.remove.bg/v1.0/account', {
         headers: { 'X-Api-Key': cleanKey },
       });
-
       const data = await rbgRes.json().catch(() => null);
-
       if (rbgRes.ok) {
-        const totalCredits = data?.data?.attributes?.credits?.total ?? 0;
-        const freeCredits = data?.data?.attributes?.credits?.free ?? 0;
-        const msg = `API Key Remove.bg valid & aktif! Total kredit: ${totalCredits} (Free credits: ${freeCredits})`;
-        setRemoveBgTestResult({
+        const total = data?.data?.attributes?.credits?.total ?? 0;
+        const free = data?.data?.attributes?.credits?.free ?? 0;
+        return {
           success: true,
-          message: msg,
-          credits: totalCredits,
-        });
-        showToast('API Key Remove.bg valid & terhubung!', 'success');
-        localStorage.setItem('psp_removebg_api_key', cleanKey);
-        fetch('/api/removebg-config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: cleanKey }),
-        }).catch(() => {});
-        return;
+          total,
+          free,
+          message: `${total} kredit (${free} free)`,
+        };
       }
-
-      // If error from Remove.bg
-      let errDetail = data?.errors?.[0]?.detail || data?.errors?.[0]?.title || '';
-      if (rbgRes.status === 401) {
-        errDetail = 'API Key tidak valid atau dinonaktifkan oleh Remove.bg';
-      }
-      setRemoveBgTestResult({
+      const errDetail = data?.errors?.[0]?.detail || data?.errors?.[0]?.title || '';
+      return {
         success: false,
-        message: errDetail || `Pengujian gagal (HTTP ${rbgRes.status})`,
-      });
-      showToast(`API Key Remove.bg gagal: ${errDetail || rbgRes.status}`, 'error');
-    } catch (err: any) {
-      // Try testing via backend if direct fetch failed
+        total: 0,
+        free: 0,
+        message: rbgRes.status === 401 ? 'Key Tidak Valid' : errDetail || `Status ${rbgRes.status}`,
+      };
+    } catch {
+      // Proxy fallback via server
       try {
         const proxyRes = await fetch('/api/removebg/test-key', {
           method: 'POST',
@@ -147,26 +164,56 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         });
         const proxyData = await proxyRes.json();
         if (proxyRes.ok && proxyData.success) {
-          setRemoveBgTestResult({
-            success: true,
-            message: proxyData.message,
-          });
-          showToast('API Key Remove.bg valid & terhubung!', 'success');
-          localStorage.setItem('psp_removebg_api_key', cleanKey);
-          return;
+          const tot = proxyData.credits?.total ?? 50;
+          const fr = proxyData.credits?.free ?? 50;
+          return { success: true, total: tot, free: fr, message: `${tot} kredit` };
         }
       } catch {
         // Ignored
       }
-
-      setRemoveBgTestResult({
-        success: false,
-        message: err?.message || 'Gagal menghubungi server Remove.bg.',
-      });
-      showToast(err?.message || 'Gagal menguji API Key Remove.bg', 'error');
-    } finally {
-      setTestingRemoveBg(false);
+      return { success: false, total: 0, free: 0, message: 'Gagal menghubungi Remove.bg' };
     }
+  };
+
+  const handleTestKeyIndex = async (index: number) => {
+    const key = removeBgKeys[index]?.trim();
+    if (!key) {
+      showToast(`Masukkan API Key #${index + 1} terlebih dahulu`, 'error');
+      return;
+    }
+    setTestingKeyIndex(index);
+    const res = await checkSingleKeyCredits(key);
+    setKeyCredits((prev) => ({ ...prev, [index]: res }));
+    setTestingKeyIndex(null);
+    if (res.success) {
+      showToast(`Key #${index + 1} valid! Saldo: ${res.total} kredit.`, 'success');
+    } else {
+      showToast(`Key #${index + 1} gagal: ${res.message}`, 'error');
+    }
+  };
+
+  const handleTestAllKeys = async () => {
+    const nonEmpties = removeBgKeys.filter((k) => k.trim());
+    if (nonEmpties.length === 0) {
+      showToast('Masukkan minimal 1 API Key Remove.bg', 'error');
+      return;
+    }
+    setIsTestingAll(true);
+    let totalPool = 0;
+    let validCount = 0;
+
+    for (let i = 0; i < removeBgKeys.length; i++) {
+      const k = removeBgKeys[i]?.trim();
+      if (!k) continue;
+      const res = await checkSingleKeyCredits(k);
+      setKeyCredits((prev) => ({ ...prev, [i]: res }));
+      if (res.success) {
+        totalPool += res.total;
+        validCount++;
+      }
+    }
+    setIsTestingAll(false);
+    showToast(`Pemeriksaan selesai: ${validCount} key aktif dengan total ${totalPool} kredit pool!`, 'success');
   };
 
   const handleTestConnection = async () => {
@@ -238,17 +285,16 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         await savePermanentSupabaseConfig(cleanUrl, cleanKey);
       }
 
-      // 1b. Save Remove.bg API Key permanently to server & localStorage
-      const cleanRemoveBgKey = removeBgApiKey.trim();
-      if (cleanRemoveBgKey) {
-        localStorage.setItem('psp_removebg_api_key', cleanRemoveBgKey);
+      // 1b. Save Remove.bg API Keys Pool permanently to server & localStorage
+      const cleanKeys = removeBgKeys.map((k) => k.trim()).filter(Boolean);
+      saveStoredRemoveBgApiKeys(cleanKeys);
+
+      if (cleanKeys.length > 0) {
         await fetch('/api/removebg-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: cleanRemoveBgKey }),
+          body: JSON.stringify({ apiKey: cleanKeys[0] }),
         }).catch(() => {});
-      } else {
-        localStorage.removeItem('psp_removebg_api_key');
       }
 
       // 2. Save settings to app storage & Supabase
@@ -264,9 +310,15 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         return_policy: settings.return_policy || '',
         supabase_url: cleanUrl,
         supabase_anon_key: cleanKey,
-        removebg_api_key: cleanRemoveBgKey,
+        removebg_api_key: cleanKeys[0] || '',
+        removebg_api_keys: cleanKeys,
       });
-      showToast('Pengaturan toko, Supabase, & API Key Remove.bg berhasil disimpan!', 'success');
+      showToast(
+        cleanKeys.length > 1
+          ? `Pengaturan toko & ${cleanKeys.length} API Key Remove.bg berhasil disimpan!`
+          : 'Pengaturan toko & API Key Remove.bg berhasil disimpan!',
+        'success'
+      );
     } catch {
       showToast('Gagal menyimpan pengaturan toko', 'error');
     } finally {
@@ -359,109 +411,203 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           </div>
         </div>
 
-        {/* Section 2: Remove.bg API - Magic Thumbnail */}
-        <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
+        {/* Section 2: Remove.bg API - Multi-Key Quota Pool */}
+        <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-neutral-100 gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
-                <Sparkles className="w-3.5 h-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
+                <Sparkles className="w-4 h-4" />
               </div>
-              <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
-                Remove.bg API - Magic Thumbnail
-              </h3>
+              <div>
+                <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
+                  Remove.bg API - Magic Thumbnail (Multi-Key Pool)
+                </h3>
+                <p className="text-[11px] text-neutral-500">
+                  Otomatis beralih ke key cadangan saat kuota key utama habis (402 / 429)
+                </p>
+              </div>
             </div>
 
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-              removeBgApiKey.trim()
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-neutral-100 text-neutral-600 border-neutral-200'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${removeBgApiKey.trim() ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
-              {removeBgApiKey.trim() ? 'Remove.bg Siap' : 'Key Belum Diisi'}
-            </span>
+            <div className="flex items-center gap-2">
+              {(() => {
+                const nonEmpties = removeBgKeys.filter((k) => k.trim());
+                const testedList = Object.values(keyCredits).filter((c) => c.success);
+                const totalPoolCredits = testedList.reduce((acc, c) => acc + c.total, 0);
+
+                if (testedList.length > 0) {
+                  return (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Total Pool: {totalPoolCredits} Kredit ({testedList.length} Key)</span>
+                    </span>
+                  );
+                }
+
+                return (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                    nonEmpties.length > 0
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${nonEmpties.length > 0 ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
+                    {nonEmpties.length > 0 ? `${nonEmpties.length} Key Terpasang` : 'Key Belum Diisi'}
+                  </span>
+                );
+              })()}
+            </div>
           </div>
 
-          <p className="text-xs text-neutral-500 leading-relaxed">
-            Fitur <strong>Magic Thumbnail</strong> menggunakan layanan resmi <strong>Remove.bg API</strong> untuk mendeteksi subjek produk dan menghapus background foto menjadi transparan murni (PNG). Hasilnya super rapi dan profesional untuk katalog e-commerce preloved.
-          </p>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                Remove.bg API Key
-              </label>
-              <a
-                href="https://www.remove.bg/api"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-800 hover:underline"
-              >
-                <span>Dapatkan API Key di remove.bg/api (50 free credits)</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+          {/* Info Banner on Multi-Key Quota */}
+          <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-xs text-emerald-950 flex items-start gap-2.5">
+            <Layers className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-semibold text-emerald-900 leading-snug">
+                Tips Kuota Melimpah (Gratis 50 Kredit / Akun Remove.bg):
+              </p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">
+                Anda dapat mendaftarkan beberapa akun di <strong>remove.bg</strong> (masing-masing akun mendapat 50 free credits). Masukkan semua API key-nya di sini. Sistem akan otomatis memakai <strong>Key #1</strong>, dan jika kuotanya habis (402), otomatis langsung melanjutkan pemrosesan foto menggunakan <strong>Key #2</strong>, <strong>#3</strong>, dst. tanpa kendala!
+              </p>
             </div>
+          </div>
 
-            <div className="relative">
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
-                <Key className="w-4 h-4" />
-              </div>
-              <input
-                type={showRemoveBgKey ? 'text' : 'password'}
-                value={removeBgApiKey}
-                onChange={(e) => setRemoveBgApiKey(e.target.value)}
-                placeholder="Masukkan API key Remove.bg..."
-                className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-emerald-600"
-              />
+          {/* Keys List */}
+          <div className="space-y-3.5">
+            {removeBgKeys.map((key, index) => {
+              const isFirst = index === 0;
+              const isShowing = !!showKeyMap[index];
+              const isChecking = testingKeyIndex === index;
+              const creditInfo = keyCredits[index];
+
+              return (
+                <div
+                  key={index}
+                  className="p-3.5 sm:p-4 rounded-xl border border-neutral-200 bg-neutral-50/40 space-y-2.5 transition-all hover:border-neutral-300"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[10px] font-bold flex items-center justify-center">
+                        {index + 1}
+                      </span>
+                      <span className="text-xs font-bold text-neutral-800">
+                        {isFirst ? 'API Key Utama (#1)' : `API Key Cadangan (#${index + 1})`}
+                      </span>
+                      {isFirst && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                          PRIORITAS 1
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Credit Status Badge */}
+                    {creditInfo && (
+                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 ${
+                        creditInfo.success
+                          ? creditInfo.total > 0
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        {creditInfo.success ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>{creditInfo.total > 0 ? `${creditInfo.total} Kredit Tersedia` : '0 Kredit (Habis)'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-3 h-3 text-red-600" />
+                            <span>{creditInfo.message}</span>
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="relative flex-1">
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
+                        <Key className="w-3.5 h-3.5" />
+                      </div>
+                      <input
+                        type={isShowing ? 'text' : 'password'}
+                        value={key}
+                        onChange={(e) => handleKeyChange(index, e.target.value)}
+                        placeholder={`Masukkan API key Remove.bg #${index + 1}...`}
+                        className="w-full pl-9 pr-10 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-emerald-600 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKeyMap((prev) => ({ ...prev, [index]: !prev[index] }))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
+                        title={isShowing ? 'Sembunyikan' : 'Tampilkan'}
+                      >
+                        {isShowing ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Check single balance */}
+                      <button
+                        type="button"
+                        disabled={isChecking || !key.trim()}
+                        onClick={() => handleTestKeyIndex(index)}
+                        className="px-3 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer active:scale-98 shadow-2xs"
+                        title="Cek keaktifan key dan sisa kredit akun ini"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+                        <span>{isChecking ? 'Mengecek...' : 'Cek Saldo'}</span>
+                      </button>
+
+                      {/* Remove Key button */}
+                      {removeBgKeys.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKey(index)}
+                          className="p-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs transition-colors cursor-pointer"
+                          title="Hapus API key ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Action Row: Add Key & Check All Balance */}
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-100">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setShowRemoveBgKey(!showRemoveBgKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
-                title={showRemoveBgKey ? 'Sembunyikan' : 'Tampilkan'}
+                onClick={handleAddKey}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all active:scale-98 cursor-pointer shadow-2xs"
               >
-                {showRemoveBgKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Tambah API Key Cadangan</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={isTestingAll || removeBgKeys.filter((k) => k.trim()).length === 0}
+                onClick={handleTestAllKeys}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all active:scale-98 disabled:opacity-50 cursor-pointer shadow-2xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isTestingAll ? 'animate-spin' : ''}`} />
+                <span>{isTestingAll ? 'Mengecek Semua...' : 'Cek Saldo Semua Key'}</span>
               </button>
             </div>
-            <p className="mt-1 text-[11px] text-neutral-500">
-              Disimpan aman di browser Anda (<code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">psp_removebg_api_key</code>) dan langsung digunakan oleh tombol Magic Thumbnail saat menambah atau mengedit produk.
-            </p>
-          </div>
 
-          {/* Test Remove.bg Key Action */}
-          <div className="pt-1 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              disabled={testingRemoveBg}
-              onClick={handleTestRemoveBgKey}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs cursor-pointer"
+            <a
+              href="https://www.remove.bg/api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${testingRemoveBg ? 'animate-spin' : ''}`} />
-              <span>{testingRemoveBg ? 'Memeriksa Saldo Akun...' : 'Tes API Key Remove.bg'}</span>
-            </button>
-            <span className="text-[11px] text-neutral-400">
-              Memeriksa keaktifan key dan sisa kuota kredit tanpa memotong saldo
-            </span>
+              <span>Dapatkan 50 Kredit Gratis di remove.bg/api</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
           </div>
-
-          {/* Test Remove.bg Result Box */}
-          {removeBgTestResult && (
-            <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
-              removeBgTestResult.success
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                : 'bg-red-50 border-red-200 text-red-900'
-            }`}>
-              {removeBgTestResult.success ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-              )}
-              <div className="space-y-0.5">
-                <span className="font-bold block">
-                  {removeBgTestResult.success ? 'API Key Valid!' : 'Pengujian API Key Gagal'}
-                </span>
-                <span className="block">{removeBgTestResult.message}</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Section 3: Supabase Cloud Database Integration */}
