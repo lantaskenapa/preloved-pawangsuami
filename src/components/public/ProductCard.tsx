@@ -1,11 +1,31 @@
 import React from 'react';
 import { Product } from '../../types';
-import { formatIDR } from '../../lib/formatters';
+import { formatPriceCardParts } from '../../lib/formatters';
 import { ShoppingBag, Sparkles, ImageOff, CheckCircle2, Clock, Check } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
   onSelect: (product: Product) => void;
+}
+
+// Helper to format duration label ("Hari ini", "Kemarin", "X hari lalu")
+function formatDurationLabel(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const time = d.getTime();
+  if (isNaN(time)) return null;
+
+  const now = new Date();
+  const diffMs = now.getTime() - time;
+  if (diffMs < 0) return 'Hari ini';
+
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'Hari ini';
+  if (diffDays === 1) return 'Kemarin';
+  if (diffDays < 30) return `${diffDays} hari lalu`;
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} bln lalu`;
+  return `${Math.floor(diffDays / 365)} thn lalu`;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) => {
@@ -14,6 +34,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
 
   const isSold = product.status === 'sold';
   const isBooked = product.status === 'booked';
+
+  const dateStr = product.created_at || (product as any).date_added;
+  const duration = formatDurationLabel(dateStr);
+  const priceParts = formatPriceCardParts(product.price);
 
   // Condition color accents
   const getConditionStyle = (cond: string) => {
@@ -30,7 +54,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
   };
 
   return (
-    <div className={`group bg-white rounded-xl sm:rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
+    <div className={`group font-montserrat bg-white rounded-xl sm:rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
       isSold 
         ? 'border-neutral-200/70 shadow-xs bg-white' 
         : isBooked 
@@ -38,7 +62,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           : 'border-neutral-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_28px_rgba(0,0,0,0.07)] hover:border-neutral-300 bg-white'
     } overflow-hidden`}>
       <div>
-        {/* Image Container */}
+        {/* 1. Badge kondisi di atas foto & 2. Foto produk */}
         <div 
           onClick={() => onSelect(product)}
           className="relative aspect-square w-full bg-neutral-100 overflow-hidden cursor-pointer border-b border-neutral-100/80"
@@ -104,37 +128,56 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
         </div>
 
         {/* Content Body */}
-        <div className="p-3 sm:p-4">
-          {/* Title */}
-          <h3 
-            onClick={() => onSelect(product)}
-            className={`text-xs sm:text-sm font-medium leading-snug line-clamp-2 cursor-pointer transition-colors h-8 sm:h-10 ${
-              isSold ? 'text-neutral-500 hover:text-neutral-800' : 'text-neutral-600 hover:text-neutral-950'
-            }`}
-            title={product.name}
-          >
-            {product.name}
-          </h3>
+        <div className="p-3 sm:p-4 pb-2.5">
+          {/* 3. Baris judul + harga ringkas (sejajar horizontal dengan baseline presisi) */}
+          <div className="flex items-baseline justify-between gap-2">
+            {/* KIRI: Judul produk (Montserrat ExtraBold 800, max 2 baris) */}
+            <h3 
+              onClick={() => onSelect(product)}
+              className={`flex-1 text-sm sm:text-base font-extrabold leading-snug line-clamp-2 cursor-pointer transition-colors ${
+                isSold ? 'text-neutral-500 hover:text-neutral-700' : 'text-neutral-900 hover:text-neutral-600'
+              }`}
+              title={product.name}
+            >
+              {product.name}
+            </h3>
 
-          {/* Price & Category in 1 Row (Sebaris: Harga di Kiri, Kategori di Kanan) */}
-          <div className="mt-2.5 pt-2 border-t border-neutral-100 flex items-center justify-between gap-2">
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className={`text-sm sm:text-base font-extrabold tracking-tight font-mono ${
-                isSold ? 'text-neutral-500 line-through' : 'text-neutral-950'
+            {/* KANAN: Harga ringkas "Rp 300k" (huruf renggang tracking-wide, Rp: 500 italic, Angka: 800) */}
+            <div className="shrink-0 text-right">
+              <div className={`inline-flex items-baseline tracking-wide whitespace-nowrap ${
+                isSold ? 'text-neutral-400 line-through' : 'text-neutral-950'
               }`}>
-                {formatIDR(product.price)}
-              </span>
-              {isSold && (
-                <span className="text-[10px] font-semibold text-neutral-400 italic shrink-0">
-                  (Laku)
+                <span className="font-medium italic text-xs sm:text-sm mr-1 tracking-normal">
+                  {priceParts.prefix}
                 </span>
-              )}
+                <span className="font-extrabold text-sm sm:text-base tracking-wide">
+                  {priceParts.value}
+                </span>
+                {isSold && (
+                  <span className="text-[10px] sm:text-[11px] font-semibold text-neutral-400 italic ml-1">
+                    (Laku)
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
 
-            {/* Keterangan Kategori di sebelah kanan harga */}
-            <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-neutral-400 shrink-0 text-right truncate max-w-[45%]">
+          {/* 4. Baris kategori + durasi (sejajar horizontal, menempel rapat di bawah judul & harga) */}
+          <div className="mt-0.5 sm:mt-1 flex items-center justify-between gap-2 text-[11px] sm:text-xs">
+            {/* KIRI: Kategori (Montserrat Regular 400, warna abu text-neutral-400, uppercase) */}
+            <span className="font-normal uppercase tracking-wider text-neutral-400 truncate max-w-[60%]">
               {product.category}
             </span>
+
+            {/* KANAN: Durasi ("Hari ini", "X hari lalu", Montserrat Regular 400, text-neutral-800) */}
+            {duration && (
+              <span 
+                className="font-normal text-neutral-800 shrink-0 text-right whitespace-nowrap"
+                title={dateStr ? `Ditambahkan pada ${new Date(dateStr).toLocaleDateString('id-ID')}` : undefined}
+              >
+                {duration}
+              </span>
+            )}
           </div>
         </div>
       </div>
