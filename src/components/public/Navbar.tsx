@@ -2,7 +2,6 @@ import React from 'react';
 import { StoreSettings } from '../../types';
 import { ShoppingBag, Lock } from 'lucide-react';
 
-import { BrandLogo } from '../ui/BrandLogo';
 
 interface NavbarProps {
   settings: StoreSettings;
@@ -22,20 +21,17 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
           
-          {/* Logo & Brand Identity (Pawang Suami \n Preloved) */}
+          {/* Logo & Brand Identity */}
           <div 
             onClick={onNavigateToCatalog}
-            className="cursor-pointer flex items-center gap-2.5 sm:gap-3 group select-none"
+            className="cursor-pointer flex items-center group select-none py-1"
+            title="Pawang Suami Preloved - Beranda"
           >
-            <BrandLogo className="w-10 h-10 sm:w-11 sm:h-11 group-hover:scale-105 transition-transform" />
-            <div className="flex flex-col leading-none">
-              <span className="font-extrabold text-base sm:text-lg tracking-tight text-neutral-900">
-                Pawang Suami
-              </span>
-              <span className="font-bold text-xs sm:text-sm tracking-tight text-neutral-500 mt-0.5">
-                Preloved
-              </span>
-            </div>
+            <img
+              src="/assets/aistudio/logopawang-01_d93a2394.png"
+              alt="Pawang Suami Preloved"
+              className="h-8 sm:h-11 w-auto max-w-[190px] sm:max-w-[260px] object-contain group-hover:scale-102 transition-transform"
+            />
           </div>
 
           {/* Actions di Kanan: Tombol Shopee & Admin Login */}

@@ -131,9 +131,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             
             {/* Title / Identity */}
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white text-neutral-900 font-extrabold flex items-center justify-center text-sm">
-                PS
-              </div>
+              <img
+                src="/assets/aistudio/navbar-01_ab3651e0.png"
+                alt="Logo"
+                className="w-8 h-8 rounded-lg object-contain bg-white p-0.5 shadow-xs"
+              />
               <div>
                 <span className="font-bold text-sm sm:text-base text-white tracking-tight">
                   Dashboard Admin
