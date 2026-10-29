@@ -1,24 +1,27 @@
 /**
- * Magic Thumbnail AI - 100% Gemini Image Background Removal
- * Directly utilizes Gemini Vision/Image models via server proxy or client-side direct REST API.
- * Strict zero-fallback policy: Always uses Gemini or returns clear diagnostic error messages.
+ * Magic Thumbnail AI - 100% Remove.bg API Background Removal
+ * Official API: https://www.remove.bg/api
+ *
+ * Uses native FormData + fetch with zero external npm dependencies.
+ * Zero-fallback policy: Always uses Remove.bg or returns explicit diagnostic errors.
  */
 
 export interface MagicThumbnailResult {
   success: boolean;
   transparentImageUrl?: string;
   error?: string;
-  method?: 'gemini';
+  creditsCharged?: number;
+  method?: 'removebg';
 }
 
 /**
- * Retrieves the stored Gemini API Key from localStorage or settings cache.
+ * Retrieves the stored Remove.bg API Key from localStorage or settings cache.
  */
-export function getStoredGeminiApiKey(): string {
+export function getStoredRemoveBgApiKey(): string {
   if (typeof window === 'undefined') return '';
 
-  // 1. Direct key from Pengaturan Toko & DB
-  const directKey = localStorage.getItem('psp_gemini_api_key');
+  // 1. Direct key from localStorage (requested key: psp_removebg_api_key)
+  const directKey = localStorage.getItem('psp_removebg_api_key');
   if (directKey && directKey.trim()) {
     return directKey.trim();
   }
@@ -28,8 +31,8 @@ export function getStoredGeminiApiKey(): string {
     const rawSettings = localStorage.getItem('psp_settings_v1');
     if (rawSettings) {
       const parsed = JSON.parse(rawSettings);
-      if (parsed?.gemini_api_key && typeof parsed.gemini_api_key === 'string' && parsed.gemini_api_key.trim()) {
-        return parsed.gemini_api_key.trim();
+      if (parsed?.removebg_api_key && typeof parsed.removebg_api_key === 'string' && parsed.removebg_api_key.trim()) {
+        return parsed.removebg_api_key.trim();
       }
     }
   } catch {
@@ -40,117 +43,114 @@ export function getStoredGeminiApiKey(): string {
 }
 
 /**
- * Direct call to Google Gemini REST API.
- * Guarantees execution even on static hosts (Vercel, Netlify, GitHub Pages)
- * where the Express backend `/api/magic-thumbnail` is not running.
+ * Convert base64 data URL to native binary Blob
  */
-async function callGeminiDirectly(imageDataUrl: string, apiKey: string): Promise<MagicThumbnailResult> {
-  let base64Data = imageDataUrl;
-  let mimeType = 'image/png';
-  const match = imageDataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-  if (match) {
-    mimeType = match[1];
-    base64Data = match[2];
+function dataURLtoBlob(dataurl: string): Blob {
+  const parts = dataurl.split(',');
+  const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/png';
+  const binaryStr = atob(parts[1]);
+  const len = binaryStr.length;
+  const u8arr = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    u8arr[i] = binaryStr.charCodeAt(i);
   }
-
-  const prompt =
-    'Precisely isolate and segment the main preloved product in this image (e.g. clothing, footwear, gadget, gaming hardware, console, accessory, collectibles) preserving all physical contours, edges, and details. Remove 100% of the surrounding background, room, floor, table, and casting shadows. The result must be exclusively a transparent PNG alpha cutout of the product with no background at all, optimized for e-commerce catalog display.';
-
-  const models = ['gemini-3.1-flash-lite-image', 'gemini-2.5-flash-image', 'gemini-3.1-flash-image'];
-  let lastError = '';
-
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType,
-                    data: base64Data,
-                  },
-                },
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        lastError = `Google API mengembalikan HTTP status ${res.status}`;
-        continue;
-      }
-
-      const data = await res.json();
-
-      if (res.ok && data) {
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        for (const part of parts) {
-          if (part.inlineData?.data) {
-            const outMime = part.inlineData.mimeType || 'image/png';
-            return {
-              success: true,
-              transparentImageUrl: `data:${outMime};base64,${part.inlineData.data}`,
-              method: 'gemini',
-            };
-          }
-        }
-
-        const textOutput = parts.map((p: any) => p.text).filter(Boolean).join(' ');
-        if (textOutput) {
-          return {
-            success: false,
-            error: textOutput,
-          };
-        }
-      }
-
-      if (data?.error) {
-        const code = data.error.code;
-        const msg = data.error.message || '';
-        if (
-          code === 429 ||
-          msg.includes('Quota exceeded') ||
-          msg.includes('limit: 0') ||
-          msg.includes('free_tier') ||
-          msg.includes('RESOURCE_EXHAUSTED')
-        ) {
-          lastError =
-            'Model Image Gemini memerlukan akun dengan billing aktif (Pay-as-you-go di Google AI Studio / Google Cloud). Akun free tier memiliki kuota 0 untuk model image.';
-        } else if (msg.includes('API_KEY_INVALID') || msg.includes('not valid')) {
-          return {
-            success: false,
-            error: 'API Key Gemini tidak valid. Silakan periksa kembali API Key di menu "Pengaturan Toko & DB".',
-          };
-        } else if (msg.includes('PERMISSION_DENIED')) {
-          lastError = 'Akses ditolak (Permission Denied). Pastikan model Gemini Image diizinkan pada project API Key Anda.';
-        } else {
-          lastError = msg;
-        }
-      }
-    } catch (err: any) {
-      lastError = err?.message || 'Gagal terhubung ke Google Gemini API';
-    }
-  }
-
-  return {
-    success: false,
-    error: lastError || 'Gemini tidak dapat memproses gambar ini. Pastikan foto produk terlihat jelas.',
-  };
+  return new Blob([u8arr], { type: mime });
 }
 
 /**
- * Executes Magic Thumbnail background removal exclusively using Gemini Image AI.
- * Strict policy: Never falls back to canvas flood-fill.
+ * Convert ArrayBuffer to base64 string
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Parse Remove.bg API error responses into clear Indonesian error messages
+ */
+function parseRemoveBgError(status: number, data: any): string {
+  let detailMsg = '';
+  if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+    const firstErr = data.errors[0];
+    detailMsg = firstErr.detail || firstErr.title || '';
+  }
+
+  if (status === 401 || detailMsg.toLowerCase().includes('api key') || detailMsg.toLowerCase().includes('auth')) {
+    return 'API Key Remove.bg tidak valid atau salah. Silakan periksa kembali di menu "Pengaturan Toko & DB".';
+  }
+
+  if (status === 402 || detailMsg.toLowerCase().includes('credits') || detailMsg.toLowerCase().includes('insufficient')) {
+    return 'Kredit akun Remove.bg Anda telah habis (402 Insufficient Credits). Silakan top up kredit atau gunakan akun Remove.bg lain.';
+  }
+
+  if (status === 429 || detailMsg.toLowerCase().includes('rate limit')) {
+    return 'Batas frekuensi panggilan Remove.bg terlampaui (429 Rate Limit). Silakan tunggu sebentar dan coba lagi.';
+  }
+
+  if (detailMsg) {
+    return `Remove.bg Error (${status}): ${detailMsg}`;
+  }
+
+  return `Gagal memproses gambar dengan Remove.bg (Status HTTP ${status}).`;
+}
+
+/**
+ * Direct call to Remove.bg API (POST https://api.remove.bg/v1.0/removebg)
+ * Native implementation using fetch + FormData.
+ */
+async function callRemoveBgDirectly(imageDataUrl: string, apiKey: string): Promise<MagicThumbnailResult> {
+  try {
+    const blob = dataURLtoBlob(imageDataUrl);
+    const formData = new FormData();
+    formData.append('size', 'auto');
+    formData.append('image_file', blob, 'image.png');
+
+    const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': apiKey,
+      },
+      body: formData,
+    });
+
+    if (res.ok) {
+      const arrayBuffer = await res.arrayBuffer();
+      const base64Str = arrayBufferToBase64(arrayBuffer);
+      const credits = res.headers.get('X-Credits-Charged')
+        ? parseFloat(res.headers.get('X-Credits-Charged') || '1')
+        : 1;
+
+      return {
+        success: true,
+        transparentImageUrl: `data:image/png;base64,${base64Str}`,
+        creditsCharged: credits,
+        method: 'removebg',
+      };
+    }
+
+    const errData = await res.json().catch(() => null);
+    const errorText = parseRemoveBgError(res.status, errData);
+
+    return {
+      success: false,
+      error: errorText,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Gagal menghubungi server Remove.bg: ${err?.message || 'Pastikan koneksi internet aktif'}`,
+    };
+  }
+}
+
+/**
+ * Executes Magic Thumbnail 100% using Remove.bg API.
+ * Strict zero-fallback policy: Never falls back to canvas or Gemini Image.
  */
 export async function executeMagicThumbnail(
   imageDataUrl: string,
@@ -163,91 +163,71 @@ export async function executeMagicThumbnail(
     };
   }
 
-  // 1. Determine active Gemini API Key
-  const activeApiKey = (explicitApiKey || getStoredGeminiApiKey()).trim();
+  // 1. Determine active Remove.bg API Key
+  let activeApiKey = (explicitApiKey || getStoredRemoveBgApiKey()).trim();
 
-  // If no API key is configured anywhere, notify user immediately
+  // If no API key is set in localStorage or settings, check if server has REMOVEBG_API_KEY
   if (!activeApiKey) {
-    // Check if server already has GEMINI_API_KEY env configured
     try {
-      const serverCheck = await fetch('/api/gemini-config');
+      const serverCheck = await fetch('/api/removebg-config');
       if (serverCheck.ok) {
         const configData = await serverCheck.json();
-        if (!configData.configured) {
-          return {
-            success: false,
-            error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
-          };
+        if (configData?.configured && configData?.apiKey) {
+          activeApiKey = configData.apiKey;
         }
-      } else {
-        return {
-          success: false,
-          error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
-        };
       }
     } catch {
-      return {
-        success: false,
-        error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
-      };
+      // Ignored
     }
   }
 
-  // 2. Try server endpoint first (if Express server or Vercel serverless function is reachable)
-  let shouldCallDirect = false;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
+  // If still empty, return clear error immediately as required
+  if (!activeApiKey) {
+    return {
+      success: false,
+      error: 'API Key Remove.bg belum diisi. Silakan masukkan API Key di menu "Pengaturan Toko & DB" terlebih dahulu.',
+    };
+  }
 
-    const res = await fetch('/api/magic-thumbnail', {
+  // 2. Call Remove.bg API directly via native fetch + FormData
+  // If browser direct call encounters an issue, proxy via /api/magic-thumbnail
+  try {
+    const directResult = await callRemoveBgDirectly(imageDataUrl, activeApiKey);
+    if (directResult.success) {
+      return directResult;
+    }
+
+    // If it was an official API error (like 401 invalid key or 402 no credits), return it immediately without proxying
+    if (directResult.error && (directResult.error.includes('401') || directResult.error.includes('402') || directResult.error.includes('Key'))) {
+      return directResult;
+    }
+
+    // Try server proxy endpoint if available
+    const proxyRes = await fetch('/api/magic-thumbnail', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         image: imageDataUrl,
         apiKey: activeApiKey,
       }),
-      signal: controller.signal,
     });
-    clearTimeout(timeoutId);
 
-    const contentType = res.headers.get('content-type') || '';
-
-    // If server returned 404 or HTML (e.g. Vercel static routing without serverless function)
-    if (res.status === 404 || !contentType.includes('application/json')) {
-      shouldCallDirect = true;
-    } else {
-      const data = await res.json();
-      if (res.ok && data.success && data.transparentImageUrl) {
+    if (proxyRes.ok) {
+      const data = await proxyRes.json();
+      if (data.success && data.transparentImageUrl) {
         return {
           success: true,
           transparentImageUrl: data.transparentImageUrl,
-          method: 'gemini',
-        };
-      } else {
-        return {
-          success: false,
-          error: data.error || data.message || `Gagal memproses Magic Thumbnail (HTTP ${res.status})`,
+          method: 'removebg',
         };
       }
     }
-  } catch {
-    // Network or abort error on local endpoint -> fallback to direct Google Gemini API call
-    shouldCallDirect = true;
-  }
 
-  // 3. If backend endpoint returned 404 (e.g. deployed on Vercel/Netlify static), call Gemini directly
-  if (shouldCallDirect) {
-    if (!activeApiKey) {
-      return {
-        success: false,
-        error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
-      };
-    }
-    return await callGeminiDirectly(imageDataUrl, activeApiKey);
+    return directResult;
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Kendala Remove.bg: ${err?.message || 'Gagal memproses gambar'}`,
+    };
   }
-
-  return {
-    success: false,
-    error: 'Terjadi kendala saat memproses Magic Thumbnail.',
-  };
 }

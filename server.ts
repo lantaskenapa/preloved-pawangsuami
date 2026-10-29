@@ -160,7 +160,83 @@ async function startServer() {
     }
   });
 
-  // API for Magic Thumbnail (Hapus background)
+  // API to fetch Remove.bg config
+  app.get('/api/removebg-config', (_req, res) => {
+    try {
+      const apiKey = process.env.REMOVEBG_API_KEY || '';
+      return res.json({
+        configured: !!apiKey,
+        apiKey: apiKey ? `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}` : '',
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message });
+    }
+  });
+
+  // API to test Remove.bg API Key
+  app.post('/api/removebg/test-key', async (req, res) => {
+    try {
+      const { apiKey } = req.body;
+      const effectiveKey = (apiKey || process.env.REMOVEBG_API_KEY || '').trim();
+      if (!effectiveKey) {
+        return res.status(400).json({ success: false, message: 'API Key Remove.bg belum diisi' });
+      }
+
+      const rbgRes = await fetch('https://api.remove.bg/v1.0/account', {
+        headers: { 'X-Api-Key': effectiveKey },
+      });
+
+      const data = await rbgRes.json().catch(() => null);
+
+      if (rbgRes.ok) {
+        const totalCredits = data?.data?.attributes?.credits?.total ?? 'Tersedia';
+        return res.json({
+          success: true,
+          message: `API Key Remove.bg valid & aktif! Total kredit: ${totalCredits}`,
+          credits: data?.data?.attributes?.credits,
+        });
+      }
+
+      const errDetail = data?.errors?.[0]?.detail || data?.errors?.[0]?.title || 'API Key tidak valid';
+      return res.status(400).json({
+        success: false,
+        message: `Uji API Key Remove.bg gagal: ${errDetail}`,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        message: `Gagal menghubungi server Remove.bg: ${err?.message || 'Koneksi error'}`,
+      });
+    }
+  });
+
+  // API to save Remove.bg config permanently on server (.env)
+  app.post('/api/removebg-config', (req, res) => {
+    try {
+      const { apiKey } = req.body;
+      const cleanKey = (apiKey || '').trim();
+
+      let envContent = '';
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, 'utf-8');
+      }
+      const lines = envContent.split('\n').filter((l) => !l.startsWith('REMOVEBG_API_KEY='));
+      if (cleanKey) {
+        lines.push(`REMOVEBG_API_KEY=${cleanKey}`);
+        process.env.REMOVEBG_API_KEY = cleanKey;
+      } else {
+        delete process.env.REMOVEBG_API_KEY;
+      }
+      fs.writeFileSync(envPath, lines.join('\n').trim() + '\n', 'utf-8');
+
+      console.log('[Remove.bg Config] Saved permanently to server');
+      return res.json({ success: true, message: 'API Key Remove.bg berhasil disimpan ke server!' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || 'Gagal menyimpan key ke server' });
+    }
+  });
+
+  // API for Magic Thumbnail (Hapus background menggunakan Remove.bg)
   app.post('/api/magic-thumbnail', async (req, res) => {
     try {
       const { image, apiKey } = req.body;
@@ -168,89 +244,60 @@ async function startServer() {
         return res.status(400).json({ success: false, error: 'Gambar tidak ditemukan' });
       }
 
-      const effectiveKey = (apiKey || process.env.GEMINI_API_KEY || '').trim();
+      const effectiveKey = (apiKey || process.env.REMOVEBG_API_KEY || '').trim();
       if (!effectiveKey) {
         return res.status(400).json({
           success: false,
-          error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
+          error: 'API Key Remove.bg belum diisi. Silakan masukkan API Key di menu "Pengaturan Toko & DB" terlebih dahulu.',
         });
       }
 
-      try {
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({
-          apiKey: effectiveKey,
-          httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-        });
+      let base64Clean = image;
+      const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
+      if (match) {
+        base64Clean = match[2];
+      }
 
-        let base64Data = image;
-        let mimeType = 'image/png';
-        const match = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
-        if (match) {
-          mimeType = match[1];
-          base64Data = match[2];
-        }
+      const formData = new FormData();
+      formData.append('size', 'auto');
+      formData.append('image_file_b64', base64Clean);
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite-image',
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType,
-                },
-              },
-              {
-                text: 'Precisely isolate and segment the main preloved product in this image (e.g. clothing, footwear, gadget, gaming hardware, console, accessory, collectibles) preserving all physical contours, edges, and details. Remove 100% of the surrounding background, room, floor, table, and casting shadows. The result must be exclusively a transparent PNG alpha cutout of the product with no background at all, optimized for e-commerce catalog display.',
-              },
-            ],
-          },
-        });
+      const rbgResponse = await fetch('https://api.remove.bg/v1.0/removebg', {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': effectiveKey,
+        },
+        body: formData,
+      });
 
-        if (response?.candidates?.[0]?.content?.parts) {
-          for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData?.data) {
-              const outMime = part.inlineData.mimeType || 'image/png';
-              return res.json({
-                success: true,
-                transparentImageUrl: `data:${outMime};base64,${part.inlineData.data}`,
-                method: 'gemini',
-              });
-            }
-          }
-        }
-
-        const textOutput = response?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).filter(Boolean).join(' ') || '';
-        return res.status(400).json({
-          success: false,
-          error: textOutput || 'Model Gemini tidak menghasilkan gambar transparan. Pastikan produk terlihat jelas dan coba lagi.',
-        });
-      } catch (geminiErr: any) {
-        console.error('[Gemini Magic Thumbnail Error]:', geminiErr);
-        let errorMsg = geminiErr?.message || 'Gagal memproses gambar dengan Gemini AI.';
-        try {
-          const parsed = JSON.parse(errorMsg);
-          if (parsed?.error?.message) {
-            errorMsg = parsed.error.message;
-          }
-        } catch {
-          // not JSON
-        }
-
-        if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid')) {
-          errorMsg = 'API Key Gemini tidak valid atau dinonaktifkan. Periksa kembali di Pengaturan Toko & DB.';
-        } else if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('Quota exceeded') || errorMsg.includes('429')) {
-          errorMsg = 'Kuota API Key Gemini telah habis (429 Resource Exhausted). Silakan cek billing atau ganti API Key.';
-        } else if (errorMsg.includes('PERMISSION_DENIED')) {
-          errorMsg = 'Akses ditolak (Permission Denied). Pastikan model Gemini Image diizinkan pada project API Key Anda.';
-        }
-
-        return res.status(400).json({
-          success: false,
-          error: `Gemini API Error: ${errorMsg}`,
+      if (rbgResponse.ok) {
+        const arrayBuffer = await rbgResponse.arrayBuffer();
+        const base64Out = Buffer.from(arrayBuffer).toString('base64');
+        return res.json({
+          success: true,
+          transparentImageUrl: `data:image/png;base64,${base64Out}`,
+          method: 'removebg',
         });
       }
+
+      const errJson = await rbgResponse.json().catch(() => null);
+      let errorMsg = 'Gagal memproses gambar';
+      if (errJson?.errors?.[0]?.detail || errJson?.errors?.[0]?.title) {
+        errorMsg = errJson.errors[0].detail || errJson.errors[0].title;
+      }
+
+      if (rbgResponse.status === 401) {
+        errorMsg = 'API Key Remove.bg tidak valid atau salah. Silakan periksa kembali di Pengaturan Toko & DB.';
+      } else if (rbgResponse.status === 402) {
+        errorMsg = 'Kredit akun Remove.bg Anda telah habis (402 Insufficient Credits). Silakan top up kredit akun Anda.';
+      } else if (rbgResponse.status === 429) {
+        errorMsg = 'Batas frekuensi panggilan Remove.bg terlampaui (429 Rate Limit). Silakan tunggu sebentar.';
+      }
+
+      return res.status(rbgResponse.status).json({
+        success: false,
+        error: errorMsg,
+      });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err?.message || 'Gagal memproses Magic Thumbnail pada server' });
     }

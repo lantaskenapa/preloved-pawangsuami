@@ -50,6 +50,7 @@ export interface StoreSettings {
   supabase_url?: string;
   supabase_anon_key?: string;
   gemini_api_key?: string;
+  removebg_api_key?: string;
   updated_at: string;
 }
 

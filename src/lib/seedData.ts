@@ -315,5 +315,6 @@ export const INITIAL_SETTINGS: StoreSettings = {
   shipping_policy: 'Pesanan sebelum jam 15:00 WIB dikirim di hari yang sama. Semua pesanan dikemas dengan bubble wrap tebal dan box karton kokoh tanpa biaya tambahan.',
   return_policy: 'Komplain barang harus menyertakan video unboxing utuh tanpa cut sesuai prosedur perlindungan pembeli Shopee Garansi.',
   gemini_api_key: '',
+  removebg_api_key: '',
   updated_at: new Date().toISOString(),
 };

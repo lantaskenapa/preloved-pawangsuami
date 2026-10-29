@@ -63,12 +63,12 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
     (typeof window !== 'undefined' ? localStorage.getItem('psp_supabase_anon_key') : '') || permanentConfig.anonKey || ''
   );
 
-  const [geminiApiKey, setGeminiApiKey] = useState(
-    (typeof window !== 'undefined' ? localStorage.getItem('psp_gemini_api_key') : '') || settings.gemini_api_key || ''
+  const [removeBgApiKey, setRemoveBgApiKey] = useState(
+    (typeof window !== 'undefined' ? localStorage.getItem('psp_removebg_api_key') : '') || settings.removebg_api_key || ''
   );
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
-  const [testingGemini, setTestingGemini] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showRemoveBgKey, setShowRemoveBgKey] = useState(false);
+  const [testingRemoveBg, setTestingRemoveBg] = useState(false);
+  const [removeBgTestResult, setRemoveBgTestResult] = useState<{ success: boolean; message: string; credits?: number } | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
@@ -78,106 +78,94 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
   const [copiedSql, setCopiedSql] = useState(false);
 
   React.useEffect(() => {
-    fetch('/api/gemini-config')
+    fetch('/api/removebg-config')
       .then((res) => (res.ok && res.headers.get('content-type')?.includes('application/json') ? res.json() : null))
       .then((data) => {
-        if (data?.configured && !geminiApiKey) {
-          setGeminiTestResult({
+        if (data?.configured && !removeBgApiKey) {
+          setRemoveBgTestResult({
             success: true,
-            message: `API Key Gemini terkonfigurasi di server (${data.apiKey || 'Aktif'}). Siap digunakan untuk Magic Thumbnail.`,
+            message: `API Key Remove.bg terkonfigurasi di server (${data.apiKey || 'Aktif'}). Siap digunakan untuk Magic Thumbnail.`,
           });
         }
       })
       .catch(() => {});
   }, []);
 
-  const handleTestGeminiKey = async () => {
-    const cleanKey = geminiApiKey.trim();
+  const handleTestRemoveBgKey = async () => {
+    const cleanKey = removeBgApiKey.trim();
     if (!cleanKey) {
-      showToast('Masukkan API Key Gemini terlebih dahulu', 'error');
+      showToast('Masukkan API Key Remove.bg terlebih dahulu', 'error');
       return;
     }
-    setTestingGemini(true);
-    setGeminiTestResult(null);
-
-    // Helper to validate directly against Google Gemini REST API (works everywhere including Vercel/Netlify static deployments)
-    const testDirectlyWithGoogle = async (key: string) => {
-      try {
-        const googleRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash?key=${encodeURIComponent(key)}`
-        );
-        const googleData = await googleRes.json();
-        if (googleRes.ok && (googleData.name || googleData.displayName)) {
-          return {
-            success: true,
-            message: `API Key Gemini valid & aktif! Terhubung ke ${googleData.displayName || 'Gemini 3.8 Flash'}.`,
-          };
-        }
-        const errMsg = googleData?.error?.message || 'API Key tidak valid atau kuota tidak mencukupi.';
-        return {
-          success: false,
-          message: errMsg,
-        };
-      } catch (directErr: any) {
-        return {
-          success: false,
-          message: directErr?.message || 'Gagal menghubungi Google Gemini API.',
-        };
-      }
-    };
+    setTestingRemoveBg(true);
+    setRemoveBgTestResult(null);
 
     try {
-      let data: { success: boolean; message: string } | null = null;
+      // 1. Test directly with official Remove.bg Account API
+      const rbgRes = await fetch('https://api.remove.bg/v1.0/account', {
+        headers: { 'X-Api-Key': cleanKey },
+      });
 
-      // 1. Try server backend endpoint first (if Express server.ts is active)
-      try {
-        const res = await fetch('/api/gemini/test-key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: cleanKey }),
+      const data = await rbgRes.json().catch(() => null);
+
+      if (rbgRes.ok) {
+        const totalCredits = data?.data?.attributes?.credits?.total ?? 0;
+        const freeCredits = data?.data?.attributes?.credits?.free ?? 0;
+        const msg = `API Key Remove.bg valid & aktif! Total kredit: ${totalCredits} (Free credits: ${freeCredits})`;
+        setRemoveBgTestResult({
+          success: true,
+          message: msg,
+          credits: totalCredits,
         });
-
-        const contentType = res.headers.get('content-type') || '';
-        if (res.ok && contentType.includes('application/json')) {
-          data = await res.json();
-        } else if (res.status === 404 || !contentType.includes('application/json')) {
-          // If 404 (e.g. running on Vercel edge/static hosting without Express backend), fallback to direct Google API
-          data = await testDirectlyWithGoogle(cleanKey);
-        } else if (contentType.includes('application/json')) {
-          data = await res.json();
-        } else {
-          data = await testDirectlyWithGoogle(cleanKey);
-        }
-      } catch {
-        // Network/proxy error on /api/gemini/test-key -> fallback to direct Google API
-        data = await testDirectlyWithGoogle(cleanKey);
-      }
-
-      if (!data) {
-        data = await testDirectlyWithGoogle(cleanKey);
-      }
-
-      setGeminiTestResult(data);
-      if (data.success) {
-        showToast('API Key Gemini valid & terhubung!', 'success');
-        localStorage.setItem('psp_gemini_api_key', cleanKey);
-        // Persist to server if server is available
-        fetch('/api/gemini-config', {
+        showToast('API Key Remove.bg valid & terhubung!', 'success');
+        localStorage.setItem('psp_removebg_api_key', cleanKey);
+        fetch('/api/removebg-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiKey: cleanKey }),
         }).catch(() => {});
-      } else {
-        showToast(`API Key gagal: ${data.message || 'Cek kembali API key'}`, 'error');
+        return;
       }
-    } catch (err: any) {
-      setGeminiTestResult({
+
+      // If error from Remove.bg
+      let errDetail = data?.errors?.[0]?.detail || data?.errors?.[0]?.title || '';
+      if (rbgRes.status === 401) {
+        errDetail = 'API Key tidak valid atau dinonaktifkan oleh Remove.bg';
+      }
+      setRemoveBgTestResult({
         success: false,
-        message: err?.message || 'Gagal menghubungi server.',
+        message: errDetail || `Pengujian gagal (HTTP ${rbgRes.status})`,
       });
-      showToast(err?.message || 'Gagal menguji API Key Gemini', 'error');
+      showToast(`API Key Remove.bg gagal: ${errDetail || rbgRes.status}`, 'error');
+    } catch (err: any) {
+      // Try testing via backend if direct fetch failed
+      try {
+        const proxyRes = await fetch('/api/removebg/test-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: cleanKey }),
+        });
+        const proxyData = await proxyRes.json();
+        if (proxyRes.ok && proxyData.success) {
+          setRemoveBgTestResult({
+            success: true,
+            message: proxyData.message,
+          });
+          showToast('API Key Remove.bg valid & terhubung!', 'success');
+          localStorage.setItem('psp_removebg_api_key', cleanKey);
+          return;
+        }
+      } catch {
+        // Ignored
+      }
+
+      setRemoveBgTestResult({
+        success: false,
+        message: err?.message || 'Gagal menghubungi server Remove.bg.',
+      });
+      showToast(err?.message || 'Gagal menguji API Key Remove.bg', 'error');
     } finally {
-      setTestingGemini(false);
+      setTestingRemoveBg(false);
     }
   };
 
@@ -250,17 +238,17 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         await savePermanentSupabaseConfig(cleanUrl, cleanKey);
       }
 
-      // 1b. Save Gemini API Key permanently to server & localStorage
-      const cleanGeminiKey = geminiApiKey.trim();
-      if (cleanGeminiKey) {
-        localStorage.setItem('psp_gemini_api_key', cleanGeminiKey);
-        await fetch('/api/gemini-config', {
+      // 1b. Save Remove.bg API Key permanently to server & localStorage
+      const cleanRemoveBgKey = removeBgApiKey.trim();
+      if (cleanRemoveBgKey) {
+        localStorage.setItem('psp_removebg_api_key', cleanRemoveBgKey);
+        await fetch('/api/removebg-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: cleanGeminiKey }),
+          body: JSON.stringify({ apiKey: cleanRemoveBgKey }),
         }).catch(() => {});
       } else {
-        localStorage.removeItem('psp_gemini_api_key');
+        localStorage.removeItem('psp_removebg_api_key');
       }
 
       // 2. Save settings to app storage & Supabase
@@ -276,9 +264,9 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         return_policy: settings.return_policy || '',
         supabase_url: cleanUrl,
         supabase_anon_key: cleanKey,
-        gemini_api_key: cleanGeminiKey,
+        removebg_api_key: cleanRemoveBgKey,
       });
-      showToast('Pengaturan toko, Supabase, & API Key Gemini berhasil disimpan!', 'success');
+      showToast('Pengaturan toko, Supabase, & API Key Remove.bg berhasil disimpan!', 'success');
     } catch {
       showToast('Gagal menyimpan pengaturan toko', 'error');
     } finally {
@@ -371,44 +359,44 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           </div>
         </div>
 
-        {/* Section 2: Google Gemini AI - Magic Thumbnail */}
+        {/* Section 2: Remove.bg API - Magic Thumbnail */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600">
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
                 <Sparkles className="w-3.5 h-3.5" />
               </div>
               <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
-                Google Gemini AI - Magic Thumbnail
+                Remove.bg API - Magic Thumbnail
               </h3>
             </div>
 
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-              geminiApiKey.trim()
-                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              removeBgApiKey.trim()
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-neutral-100 text-neutral-600 border-neutral-200'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${geminiApiKey.trim() ? 'bg-indigo-500' : 'bg-neutral-400'}`}></span>
-              {geminiApiKey.trim() ? 'Gemini AI Siap' : 'Key Belum Diisi'}
+              <span className={`w-1.5 h-1.5 rounded-full ${removeBgApiKey.trim() ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
+              {removeBgApiKey.trim() ? 'Remove.bg Siap' : 'Key Belum Diisi'}
             </span>
           </div>
 
           <p className="text-xs text-neutral-500 leading-relaxed">
-            Fitur <strong>Magic Thumbnail</strong> menggunakan AI Google Gemini untuk mendeteksi barang preloved dan menghapus background foto menjadi transparan secara otomatis. Foto produk akan terlihat rapi dan menonjol di kartu etalase katalog.
+            Fitur <strong>Magic Thumbnail</strong> menggunakan layanan resmi <strong>Remove.bg API</strong> untuk mendeteksi subjek produk dan menghapus background foto menjadi transparan murni (PNG). Hasilnya super rapi dan profesional untuk katalog e-commerce preloved.
           </p>
 
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                Gemini API Key
+                Remove.bg API Key
               </label>
               <a
-                href="https://aistudio.google.com/apikey"
+                href="https://www.remove.bg/api"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:text-emerald-800 hover:underline"
               >
-                <span>Dapatkan API Key Gratis di Google AI Studio</span>
+                <span>Dapatkan API Key di remove.bg/api (50 free credits)</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
@@ -418,59 +406,59 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
                 <Key className="w-4 h-4" />
               </div>
               <input
-                type={showGeminiKey ? 'text' : 'password'}
-                value={geminiApiKey}
-                onChange={(e) => setGeminiApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-indigo-600"
+                type={showRemoveBgKey ? 'text' : 'password'}
+                value={removeBgApiKey}
+                onChange={(e) => setRemoveBgApiKey(e.target.value)}
+                placeholder="Masukkan API key Remove.bg..."
+                className="w-full pl-10 pr-20 py-2.5 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-emerald-600"
               />
               <button
                 type="button"
-                onClick={() => setShowGeminiKey(!showGeminiKey)}
+                onClick={() => setShowRemoveBgKey(!showRemoveBgKey)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
-                title={showGeminiKey ? 'Sembunyikan' : 'Tampilkan'}
+                title={showRemoveBgKey ? 'Sembunyikan' : 'Tampilkan'}
               >
-                {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showRemoveBgKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             <p className="mt-1 text-[11px] text-neutral-500">
-              Kunci diawali dengan <code>AIzaSy...</code>. API key disimpan aman di server dan otomatis digunakan oleh tombol Magic Thumbnail saat menambah produk.
+              Disimpan aman di browser Anda (<code className="font-mono bg-neutral-100 px-1 py-0.5 rounded">psp_removebg_api_key</code>) dan langsung digunakan oleh tombol Magic Thumbnail saat menambah atau mengedit produk.
             </p>
           </div>
 
-          {/* Test Gemini Key Action */}
+          {/* Test Remove.bg Key Action */}
           <div className="pt-1 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled={testingGemini}
-              onClick={handleTestGeminiKey}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs cursor-pointer"
+              disabled={testingRemoveBg}
+              onClick={handleTestRemoveBgKey}
+              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 active:scale-98 disabled:opacity-50 shadow-2xs cursor-pointer"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${testingGemini ? 'animate-spin' : ''}`} />
-              <span>{testingGemini ? 'Menguji API Key...' : 'Tes API Key Gemini'}</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${testingRemoveBg ? 'animate-spin' : ''}`} />
+              <span>{testingRemoveBg ? 'Memeriksa Saldo Akun...' : 'Tes API Key Remove.bg'}</span>
             </button>
             <span className="text-[11px] text-neutral-400">
-              Pastikan kuota API aktif untuk fitur Magic Thumbnail otomatis
+              Memeriksa keaktifan key dan sisa kuota kredit tanpa memotong saldo
             </span>
           </div>
 
-          {/* Test Gemini Result Box */}
-          {geminiTestResult && (
+          {/* Test Remove.bg Result Box */}
+          {removeBgTestResult && (
             <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${
-              geminiTestResult.success
+              removeBgTestResult.success
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                 : 'bg-red-50 border-red-200 text-red-900'
             }`}>
-              {geminiTestResult.success ? (
+              {removeBgTestResult.success ? (
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               ) : (
                 <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               )}
               <div className="space-y-0.5">
                 <span className="font-bold block">
-                  {geminiTestResult.success ? 'API Key Valid!' : 'Pengujian API Key Gagal'}
+                  {removeBgTestResult.success ? 'API Key Valid!' : 'Pengujian API Key Gagal'}
                 </span>
-                <span className="block">{geminiTestResult.message}</span>
+                <span className="block">{removeBgTestResult.message}</span>
               </div>
             </div>
           )}

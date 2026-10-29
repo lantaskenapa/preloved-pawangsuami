@@ -141,7 +141,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setMagicTargetIndex(targetIndex);
 
     try {
-      showToast('Sedang memproses Magic Thumbnail dengan Gemini AI...', 'info');
+      showToast('Sedang memproses Magic Thumbnail via Remove.bg...', 'info');
 
       const result = await executeMagicThumbnail(targetImage);
       if (result.success && result.transparentImageUrl) {
@@ -150,9 +150,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           copy[targetIndex] = result.transparentImageUrl!;
           return copy;
         });
-        showToast('✨ Magic Thumbnail Gemini berhasil! Background foto produk telah diubah menjadi transparan.', 'success');
+        showToast('✨ Magic Thumbnail berhasil! Background produk telah dihapus menjadi transparan via Remove.bg.', 'success');
       } else {
-        showToast(result.error || 'Gagal memproses Magic Thumbnail dengan Gemini AI', 'error');
+        showToast(result.error || 'Gagal memproses Magic Thumbnail', 'error');
       }
     } catch (err: any) {
       showToast(err?.message || 'Gagal memproses Magic Thumbnail', 'error');
@@ -534,7 +534,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   title={
                     images.length === 0
                       ? 'Unggah foto terlebih dahulu untuk mengaktifkan Magic Thumbnail'
-                      : 'Gunakan AI untuk mendiagnosa dan membuat Magic Thumbnail transparan'
+                      : 'Gunakan Remove.bg untuk membuat Magic Thumbnail transparan berkualitas tinggi'
                   }
                 >
                   {isMagicLoading && magicTargetIndex === 0 ? (
