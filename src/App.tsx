@@ -225,11 +225,15 @@ function MainApp() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F7F7F7] flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white flex items-center justify-center font-extrabold text-xl animate-pulse">
-          PS
+      <div className="min-h-screen bg-[#F7F7F7] flex flex-col items-center justify-center p-4 select-none">
+        <div className="relative">
+          <img
+            src="/assets/aistudio/navbar-01_ab3651e0.png"
+            alt="Pawang Suami Preloved"
+            className="w-16 h-16 sm:w-20 sm:h-20 object-contain animate-pulse drop-shadow-sm"
+          />
         </div>
-        <p className="mt-4 text-xs font-semibold text-neutral-500 uppercase tracking-widest">
+        <p className="mt-4 text-xs font-semibold text-neutral-500 uppercase tracking-widest font-mono">
           Memuat Pawang Suami Preloved...
         </p>
       </div>
