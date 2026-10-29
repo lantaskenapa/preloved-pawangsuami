@@ -799,14 +799,6 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
             </div>
           )}
         </div>
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline"
-            >
-              <span>Dapatkan 50 Kredit Gratis di remove.bg/api</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
 
         {/* Section 3: Supabase Cloud Database Integration */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
