@@ -165,28 +165,6 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     setZoom((prev) => Math.min(3, Math.max(1, prev + zoomDelta)));
   };
 
-  // Quick positioning presets
-  const handlePreset = (preset: 'center' | 'top' | 'bottom' | 'left' | 'right') => {
-    const { maxPanX, maxPanY } = getPanBounds();
-    switch (preset) {
-      case 'center':
-        setPan({ x: 0, y: 0 });
-        break;
-      case 'top':
-        setPan({ x: 0, y: maxPanY });
-        break;
-      case 'bottom':
-        setPan({ x: 0, y: -maxPanY });
-        break;
-      case 'left':
-        setPan({ x: maxPanX, y: 0 });
-        break;
-      case 'right':
-        setPan({ x: -maxPanX, y: 0 });
-        break;
-    }
-  };
-
   // Apply & Crop to 1000x1000 canvas with exact Pan, Zoom, and Rotation
   const handleApplyCrop = () => {
     if (!imgRef.current) return;
@@ -408,48 +386,6 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
               <span className="text-[11px] font-mono font-bold text-neutral-600 min-w-[36px] text-right">
                 {Math.round(zoom * 100)}%
               </span>
-            </div>
-
-            {/* Position Presets */}
-            <div className="flex items-center justify-between gap-1 text-[10px] font-semibold text-neutral-600">
-              <span className="text-neutral-400">Pusatkan:</span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => handlePreset('center')}
-                  className="px-2 py-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50 shadow-2xs"
-                >
-                  Tengah
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePreset('top')}
-                  className="px-2 py-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50 shadow-2xs"
-                >
-                  Atas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePreset('bottom')}
-                  className="px-2 py-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50 shadow-2xs"
-                >
-                  Bawah
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePreset('left')}
-                  className="px-2 py-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50 shadow-2xs"
-                >
-                  Kiri
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handlePreset('right')}
-                  className="px-2 py-1 rounded-md bg-white border border-neutral-200 hover:bg-neutral-50 shadow-2xs"
-                >
-                  Kanan
-                </button>
-              </div>
             </div>
           </div>
         </div>

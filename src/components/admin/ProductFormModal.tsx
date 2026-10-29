@@ -692,51 +692,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                             </button>
                           )}
 
-                          {/* Set as Thumbnail or Magic Cutout */}
-                          {!isThumbnail ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSetThumbnail(index);
-                                }}
-                                className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
-                                title="Jadikan foto ini Thumbnail Utama"
-                              >
-                                <Star className="w-2.5 h-2.5 text-amber-400" />
-                                <span className="truncate">Sampul</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isMagicLoading}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMagicThumbnail(index);
-                                }}
-                                className="py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-0.5 cursor-pointer active:scale-95"
-                                title="Magic Thumbnail AI"
-                              >
-                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                              </button>
-                            </>
-                          ) : (
+                          {/* Set as Thumbnail */}
+                          {!isThumbnail && (
                             <button
                               type="button"
-                              disabled={isMagicLoading}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleMagicThumbnail(index);
+                                handleSetThumbnail(index);
                               }}
-                              className="flex-1 py-1 px-1.5 rounded-md bg-indigo-600/90 hover:bg-indigo-700 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
-                              title="Magic Thumbnail AI"
+                              className="flex-1 py-1 px-1.5 rounded-md bg-neutral-900/90 hover:bg-neutral-900 text-white text-[9px] font-bold shadow-sm backdrop-blur-xs flex items-center justify-center gap-1 truncate cursor-pointer active:scale-95"
+                              title="Jadikan foto ini Thumbnail Utama"
                             >
-                              {isMagicLoading && magicTargetIndex === index ? (
-                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                              ) : (
-                                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
-                              )}
-                              <span className="truncate">Magic Cutout</span>
+                              <Star className="w-2.5 h-2.5 text-amber-400" />
+                              <span className="truncate">Jadikan Sampul</span>
                             </button>
                           )}
 
