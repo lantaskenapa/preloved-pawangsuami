@@ -1,4 +1,4 @@
-import { Category, Product, ProductStatus, StoreSettings } from '../types';
+import { Category, Product, ProductCondition, ProductStatus, StoreSettings } from '../types';
 import { INITIAL_CATEGORIES, INITIAL_PRODUCTS, INITIAL_SETTINGS } from './seedData';
 import { getSupabaseClient } from './supabaseClient';
 import { slugify } from './formatters';
@@ -59,6 +59,22 @@ export function safeSaveProductsToLocalStorage(products: Product[]): boolean {
   }
 }
 
+// Helper to normalize condition strings to the new simplified types
+export function normalizeCondition(rawCond?: string): ProductCondition {
+  if (!rawCond) return 'Like New';
+  const c = rawCond.trim();
+  if (c === 'Like New' || c.startsWith('Like New')) {
+    return 'Like New';
+  }
+  if (c.includes('Sangat Baik') || c.includes('Cukup Baik') || c.includes('Baik')) {
+    return 'Cukup Baik';
+  }
+  if (c.includes('Layak') || c.includes('Minus')) {
+    return 'Masih Layak';
+  }
+  return 'Cukup Baik';
+}
+
 // Helper to ensure slug is unique across products
 function generateUniqueSlug(baseName: string, existingList: Product[], currentId?: string): string {
   const baseSlug = slugify(baseName) || 'produk';
@@ -99,6 +115,11 @@ export function initializeStorage() {
             p.original_price = seedMatch.original_price;
             needsUpdate = true;
           }
+        }
+        const normalized = normalizeCondition(p.condition);
+        if (p.condition !== normalized) {
+          p.condition = normalized;
+          needsUpdate = true;
         }
         return p;
       });
@@ -227,7 +248,7 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
       price: Number(productInput.price) || 0,
       original_price: productInput.original_price ? Number(productInput.original_price) : undefined,
       category: productInput.category || 'others',
-      condition: productInput.condition || 'Sangat Baik (90-95%)',
+      condition: normalizeCondition(productInput.condition),
       description: productInput.description || '',
       story: productInput.story || '',
       completeness: productInput.completeness || [],

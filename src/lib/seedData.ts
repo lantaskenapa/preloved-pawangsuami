@@ -59,7 +59,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 3350000,
     original_price: 4950000,
     category: 'games',
-    condition: 'Like New (99%)',
+    condition: 'Like New',
     description: 'Nintendo Switch OLED warna White versi Asia/Reg 3. Layar 7-inch OLED bening tanpa dead pixel, baterai prima 100%, joy-con tidak ada drift sama sekali. Terpasang tempered glass Spigen sejak hari pertama buka segel.',
     minus_points: [
       'Dus luar ada bekas lipatan halus di sudut bawah saat pengiriman',
@@ -84,7 +84,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 680000,
     original_price: 1100000,
     category: 'games',
-    condition: 'Sangat Baik (90-95%)',
+    condition: 'Cukup Baik',
     description: 'Controller stick original PS5 warna Midnight Black resmi Sony Indonesia (GDN). Haptic feedback dan adaptive trigger kencang normal. Baterai tahan 7-8 jam gameplay.',
     minus_points: [
       'Kabel USB-C bawaan tidak ada (hanya unit controller stick + dus original)',
@@ -109,7 +109,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 1450000,
     original_price: 2650000,
     category: 'electronics',
-    condition: 'Sangat Baik (90-95%)',
+    condition: 'Cukup Baik',
     description: 'Headphone legendaris untuk monitoring musik, mixing studio, maupun casual listening. Earpad dan headband kulit masih mulus tidak ada kelupas. Driver 45mm neodymium suara balanced dan bass tight.',
     minus_points: [
       'Kabel straight pendek 1.2m terselip/hilang (tersedia kabel coiled & straight 3m bawaan)',
@@ -134,7 +134,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 6200000,
     original_price: 9499000,
     category: 'gadgets',
-    condition: 'Like New (99%)',
+    condition: 'Like New',
     description: 'iPad Mini 6 64GB warna Starlight resmi iBox. Body super mulus no dent atau lecet. Battery Health 98%, Touch ID lancar, layar Liquid Retina tajam anti gores. Bonus flip case magnetic.',
     minus_points: [
       'Masa garansi resmi iBox sudah habis (Desember 2025)',
@@ -159,7 +159,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 890000,
     original_price: 1499000,
     category: 'gadgets',
-    condition: 'Sangat Baik (90-95%)',
+    condition: 'Cukup Baik',
     description: 'Keyboard mekanik wireless 75% layout dengan Gateron G Pro Brown switch (tactile mantap tidak terlalu berisik). Backlight White LED elegan. Support Mac dan Windows via switch toggle di samping.',
     minus_points: [
       'Keycap tombol spacebar ada sedikit kilau halus bekas pemakaian (shine wajar ABS)',
@@ -184,7 +184,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 2150000,
     original_price: 3750000,
     category: 'accessories',
-    condition: 'Baik (80-89%)',
+    condition: 'Masih Layak',
     description: 'Jam tangan automatic ikonik mesin Calibre 4R36 dengan fitur manual winding & hacking second. Kaca Hardlex bening mulus, ada baret rambut halus pemakaian wajar di bagian clasp/rantai bawah.',
     minus_points: [
       'Baret rambut (hairline scratches) pada bagian clasp pengunci rantai bawah',
@@ -209,7 +209,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 195000,
     original_price: 299000,
     category: 'shirts',
-    condition: 'Sangat Baik (90-95%)',
+    condition: 'Cukup Baik',
     description: 'Kaos kolaborasi resmi Uniqlo x KAWS warna Charcoal Grey. Bahan 100% cotton combed tebal premium khas Uniqlo UT. Sablon artwork Companion di bagian dada masih utuh tidak pecah.',
     minus_points: [
       'Hangtag kertas toko sudah dilepas',
@@ -234,7 +234,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 280000,
     original_price: 580000,
     category: 'shirts',
-    condition: 'Like New (99%)',
+    condition: 'Like New',
     description: 'Kemeja flannel bermotif kotak rustic forest green/navy. Bahan katun twill tebal hangat dengan kancing resin premium dan double pocket dada. Fit relaxed vintage.',
     minus_points: [
       'Tag kertas sudah dilepas saat mencoba fitting di rumah',
@@ -259,7 +259,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 420000,
     original_price: 749000,
     category: 'others',
-    condition: 'Like New (99%)',
+    condition: 'Like New',
     description: 'Set LEGO Speed Champions Porsche 911 original. Sudah dirakit dengan presisi rapi, stiker tertempel simetris, part 100% lengkap tidak ada yang hilang, minifigure pembalap & helm ada.',
     minus_points: [
       'Plastik sachet per nomor sudah dibuang saat perakitan',
@@ -284,7 +284,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     price: 620000,
     original_price: 1049000,
     category: 'games',
-    condition: 'Like New (99%)',
+    condition: 'Like New',
     description: 'Disc fisik PS5 Elden Ring. Disc mulus tanpa baret sama sekali. Case plastik bening dan cover art rapi.',
     minus_points: [
       'Kode DLC voucher promosi sudah pernah diklaim',

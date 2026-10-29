@@ -46,14 +46,15 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (cond.includes('Like New')) {
       return 'bg-emerald-50 text-emerald-800 border-emerald-200';
     }
-    if (cond.includes('Sangat Baik')) {
+    if (cond.includes('Cukup Baik') || cond.includes('Baik')) {
       return 'bg-blue-50 text-blue-800 border-blue-200';
-    }
-    if (cond.includes('Baik')) {
-      return 'bg-neutral-100 text-neutral-800 border-neutral-300';
     }
     return 'bg-amber-50 text-amber-900 border-amber-200';
   };
+
+  const displayCondition = (product.condition || 'Like New')
+    .replace(/\s*\([^)]*\)/g, '')
+    .trim();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in">
@@ -85,7 +86,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {/* Condition pill */}
                 <div className="absolute top-3 left-3">
                   <span className={`px-3 py-1 rounded-lg text-xs font-bold border shadow-xs ${getConditionStyle(product.condition)}`}>
-                    {product.condition}
+                    {displayCondition}
                   </span>
                 </div>
               </div>

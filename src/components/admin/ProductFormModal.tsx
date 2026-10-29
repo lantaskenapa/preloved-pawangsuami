@@ -46,7 +46,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [priceInput, setPriceInput] = useState('');
   const [originalPriceInput, setOriginalPriceInput] = useState('');
   const [category, setCategory] = useState('');
-  const [condition, setCondition] = useState<ProductCondition>('Sangat Baik (90-95%)');
+  const [condition, setCondition] = useState<ProductCondition>('Like New');
   const [description, setDescription] = useState('');
   const [shopeeUrl, setShopeeUrl] = useState('');
   const [status, setStatus] = useState<ProductStatus>('published');
@@ -83,7 +83,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setPriceInput('');
       setOriginalPriceInput('');
       setCategory(categories[0]?.slug || 'games');
-      setCondition('Sangat Baik (90-95%)');
+      setCondition('Like New');
       setDescription('');
       setShopeeUrl('https://shopee.co.id');
       setStatus('published');
@@ -472,10 +472,9 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 onChange={(e) => setCondition(e.target.value as ProductCondition)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-neutral-300 text-sm text-neutral-900 focus:outline-hidden focus:border-neutral-900"
               >
-                <option value="Like New (99%)">Like New (99%)</option>
-                <option value="Sangat Baik (90-95%)">Sangat Baik (90-95%)</option>
-                <option value="Baik (80-89%)">Baik (80-89%)</option>
-                <option value="Minus Pemakaian (Wajar)">Minus Pemakaian (Wajar)</option>
+                <option value="Like New">Like New</option>
+                <option value="Cukup Baik">Cukup Baik</option>
+                <option value="Masih Layak">Masih Layak</option>
               </select>
             </div>
           </div>

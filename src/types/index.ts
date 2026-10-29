@@ -1,8 +1,7 @@
 export type ProductCondition = 
-  | 'Like New (99%)'
-  | 'Sangat Baik (90-95%)'
-  | 'Baik (80-89%)'
-  | 'Minus Pemakaian (Wajar)';
+  | 'Like New'
+  | 'Cukup Baik'
+  | 'Masih Layak';
 
 export type ProductStatus = 'published' | 'draft' | 'sold' | 'booked';
 

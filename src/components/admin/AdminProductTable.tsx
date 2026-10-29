@@ -303,7 +303,7 @@ export const AdminProductTable: React.FC<AdminProductTableProps> = ({
                       {/* Condition & Minus Points */}
                       <td className="py-3 px-4">
                         <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200">
-                          {prod.condition}
+                          {(prod.condition || 'Like New').replace(/\s*\([^)]*\)/g, '').trim()}
                         </span>
                         {prod.minus_points && prod.minus_points.length > 0 ? (
                           <span className="block text-[10px] text-red-600 font-semibold mt-1">

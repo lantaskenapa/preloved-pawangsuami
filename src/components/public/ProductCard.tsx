@@ -44,14 +44,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
     if (cond.includes('Like New')) {
       return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
     }
-    if (cond.includes('Sangat Baik')) {
+    if (cond.includes('Cukup Baik') || cond.includes('Baik')) {
       return 'bg-blue-50 text-blue-700 border-blue-200/80';
-    }
-    if (cond.includes('Baik')) {
-      return 'bg-neutral-100 text-neutral-700 border-neutral-300';
     }
     return 'bg-amber-50 text-amber-800 border-amber-200/80';
   };
+
+  const displayCondition = (product.condition || 'Like New')
+    .replace(/\s*\([^)]*\)/g, '')
+    .trim();
 
   return (
     <div className={`group font-montserrat bg-white rounded-xl sm:rounded-2xl border transition-all duration-300 flex flex-col justify-between ${
@@ -88,7 +89,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           {/* Condition Tag on Image */}
           <div className="absolute top-2 left-2 sm:top-3 sm:left-3 flex items-center gap-1.5 z-10">
             <span className={`px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-[11px] font-semibold border backdrop-blur-md shadow-2xs ${getConditionStyle(product.condition)}`}>
-              {product.condition}
+              {displayCondition}
             </span>
           </div>
 
