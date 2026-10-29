@@ -32,9 +32,18 @@ import {
   Plus,
   Trash2,
   Layers,
+  Cpu,
+  Cloud,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
-import { getStoredRemoveBgApiKeys, saveStoredRemoveBgApiKeys } from '../../lib/magicThumbnail';
+import {
+  getStoredRemoveBgApiKeys,
+  saveStoredRemoveBgApiKeys,
+  getStoredMagicThumbnailEngine,
+  saveStoredMagicThumbnailEngine,
+} from '../../lib/magicThumbnail';
 
 interface StoreSettingsFormProps {
   settings: StoreSettings;
@@ -75,6 +84,14 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
       : settings.removebg_api_key
         ? [settings.removebg_api_key]
         : ['']
+  );
+  // Magic Thumbnail Engine Toggle ('imgly' vs 'removebg')
+  const [thumbnailEngine, setThumbnailEngine] = useState<'imgly' | 'removebg'>(
+    settings.magic_thumbnail_engine || getStoredMagicThumbnailEngine() || 'imgly'
+  );
+  const [showRemoveBgConfig, setShowRemoveBgConfig] = useState(
+    (settings.magic_thumbnail_engine || getStoredMagicThumbnailEngine()) === 'removebg' ||
+    removeBgKeys.some((k) => k.trim().length > 0)
   );
   const [showKeyMap, setShowKeyMap] = useState<Record<number, boolean>>({});
   const [testingKeyIndex, setTestingKeyIndex] = useState<number | null>(null);
@@ -285,9 +302,10 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         await savePermanentSupabaseConfig(cleanUrl, cleanKey);
       }
 
-      // 1b. Save Remove.bg API Keys Pool permanently to server & localStorage
+      // 1b. Save Remove.bg API Keys Pool & Magic Thumbnail Engine
       const cleanKeys = removeBgKeys.map((k) => k.trim()).filter(Boolean);
       saveStoredRemoveBgApiKeys(cleanKeys);
+      saveStoredMagicThumbnailEngine(thumbnailEngine);
 
       if (cleanKeys.length > 0) {
         await fetch('/api/removebg-config', {
@@ -312,11 +330,10 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
         supabase_anon_key: cleanKey,
         removebg_api_key: cleanKeys[0] || '',
         removebg_api_keys: cleanKeys,
+        magic_thumbnail_engine: thumbnailEngine,
       });
       showToast(
-        cleanKeys.length > 1
-          ? `Pengaturan toko & ${cleanKeys.length} API Key Remove.bg berhasil disimpan!`
-          : 'Pengaturan toko & API Key Remove.bg berhasil disimpan!',
+        `Pengaturan toko berhasil disimpan! Mesin Magic Thumbnail: ${thumbnailEngine === 'imgly' ? 'Imgly AI (Gratis Browser)' : 'Remove.bg API'}`,
         'success'
       );
     } catch {
@@ -411,196 +428,377 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           </div>
         </div>
 
-        {/* Section 2: Remove.bg API - Multi-Key Quota Pool */}
+        {/* Section 2: Magic Thumbnail AI Engine & Key Settings */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-neutral-100 gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-emerald-600">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-neutral-900 uppercase tracking-wider">
-                  Remove.bg API - Magic Thumbnail (Multi-Key Pool)
+                  Magic Thumbnail AI - Pilihan Mesin Cutout
                 </h3>
                 <p className="text-[11px] text-neutral-500">
-                  Otomatis beralih ke key cadangan saat kuota key utama habis (402 / 429)
+                  Pilih mesin pemotong background produk dan auto-center canvas
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {(() => {
-                const nonEmpties = removeBgKeys.filter((k) => k.trim());
-                const testedList = Object.values(keyCredits).filter((c) => c.success);
-                const totalPoolCredits = testedList.reduce((acc, c) => acc + c.total, 0);
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
+                thumbnailEngine === 'imgly'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${thumbnailEngine === 'imgly' ? 'bg-emerald-500' : 'bg-indigo-500 animate-pulse'}`}></span>
+                <span>{thumbnailEngine === 'imgly' ? 'Imgly AI (Aktif - Tanpa Key)' : 'Remove.bg API (Aktif)'}</span>
+              </span>
+            </div>
+          </div>
 
-                if (testedList.length > 0) {
-                  return (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Total Pool: {totalPoolCredits} Kredit ({testedList.length} Key)</span>
+          {/* Dual Engine Selector Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* Card 1: Imgly AI Browser */}
+            <div
+              onClick={() => {
+                setThumbnailEngine('imgly');
+                saveStoredMagicThumbnailEngine('imgly');
+              }}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                thumbnailEngine === 'imgly'
+                  ? 'border-emerald-600 bg-emerald-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-xs sm:text-sm text-neutral-900">
+                      Imgly AI Browser
                     </span>
-                  );
-                }
-
-                return (
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                    nonEmpties.length > 0
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-neutral-100 text-neutral-600 border-neutral-200'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${nonEmpties.length > 0 ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
-                    {nonEmpties.length > 0 ? `${nonEmpties.length} Key Terpasang` : 'Key Belum Diisi'}
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-600 text-white">
+                    Gratis & Unlimited
                   </span>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Info Banner on Multi-Key Quota */}
-          <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-xs text-emerald-950 flex items-start gap-2.5">
-            <Layers className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-semibold text-emerald-900 leading-snug">
-                Tips Kuota Melimpah (Gratis 50 Kredit / Akun Remove.bg):
-              </p>
-              <p className="text-[11px] text-emerald-800 leading-relaxed">
-                Anda dapat mendaftarkan beberapa akun di <strong>remove.bg</strong> (masing-masing akun mendapat 50 free credits). Masukkan semua API key-nya di sini. Sistem akan otomatis memakai <strong>Key #1</strong>, dan jika kuotanya habis (402), otomatis langsung melanjutkan pemrosesan foto menggunakan <strong>Key #2</strong>, <strong>#3</strong>, dst. tanpa kendala!
-              </p>
-            </div>
-          </div>
-
-          {/* Keys List */}
-          <div className="space-y-3.5">
-            {removeBgKeys.map((key, index) => {
-              const isFirst = index === 0;
-              const isShowing = !!showKeyMap[index];
-              const isChecking = testingKeyIndex === index;
-              const creditInfo = keyCredits[index];
-
-              return (
-                <div
-                  key={index}
-                  className="p-3.5 sm:p-4 rounded-xl border border-neutral-200 bg-neutral-50/40 space-y-2.5 transition-all hover:border-neutral-300"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[10px] font-bold flex items-center justify-center">
-                        {index + 1}
-                      </span>
-                      <span className="text-xs font-bold text-neutral-800">
-                        {isFirst ? 'API Key Utama (#1)' : `API Key Cadangan (#${index + 1})`}
-                      </span>
-                      {isFirst && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                          PRIORITAS 1
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Credit Status Badge */}
-                    {creditInfo && (
-                      <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 ${
-                        creditInfo.success
-                          ? creditInfo.total > 0
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-amber-50 text-amber-800 border-amber-200'
-                          : 'bg-red-50 text-red-700 border-red-200'
-                      }`}>
-                        {creditInfo.success ? (
-                          <>
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>{creditInfo.total > 0 ? `${creditInfo.total} Kredit Tersedia` : '0 Kredit (Habis)'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="w-3 h-3 text-red-600" />
-                            <span>{creditInfo.message}</span>
-                          </>
-                        )}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <div className="relative flex-1">
-                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
-                        <Key className="w-3.5 h-3.5" />
-                      </div>
-                      <input
-                        type={isShowing ? 'text' : 'password'}
-                        value={key}
-                        onChange={(e) => handleKeyChange(index, e.target.value)}
-                        placeholder={`Masukkan API key Remove.bg #${index + 1}...`}
-                        className="w-full pl-9 pr-10 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-emerald-600 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowKeyMap((prev) => ({ ...prev, [index]: !prev[index] }))}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
-                        title={isShowing ? 'Sembunyikan' : 'Tampilkan'}
-                      >
-                        {isShowing ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Check single balance */}
-                      <button
-                        type="button"
-                        disabled={isChecking || !key.trim()}
-                        onClick={() => handleTestKeyIndex(index)}
-                        className="px-3 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer active:scale-98 shadow-2xs"
-                        title="Cek keaktifan key dan sisa kredit akun ini"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-                        <span>{isChecking ? 'Mengecek...' : 'Cek Saldo'}</span>
-                      </button>
-
-                      {/* Remove Key button */}
-                      {removeBgKeys.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveKey(index)}
-                          className="p-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs transition-colors cursor-pointer"
-                          title="Hapus API key ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
+                <p className="text-xs text-neutral-600 leading-relaxed pt-1">
+                  Model AI ISNet dijalankan langsung di browser Anda menggunakan WebAssembly. <strong>100% Gratis & tanpa API Key</strong>, tanpa batas kuota akun, dan gambar otomatis di-center di canvas persegi.
+                </p>
+              </div>
 
-          {/* Action Row: Add Key & Check All Balance */}
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-100">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAddKey}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all active:scale-98 cursor-pointer shadow-2xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Tambah API Key Cadangan</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={isTestingAll || removeBgKeys.filter((k) => k.trim()).length === 0}
-                onClick={handleTestAllKeys}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all active:scale-98 disabled:opacity-50 cursor-pointer shadow-2xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isTestingAll ? 'animate-spin' : ''}`} />
-                <span>{isTestingAll ? 'Mengecek Semua...' : 'Cek Saldo Semua Key'}</span>
-              </button>
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-200/60 text-xs">
+                <span className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Bawaan Sistem (Rekomendasi)
+                </span>
+                <input
+                  type="radio"
+                  name="thumbnailEngine"
+                  checked={thumbnailEngine === 'imgly'}
+                  onChange={() => {
+                    setThumbnailEngine('imgly');
+                    saveStoredMagicThumbnailEngine('imgly');
+                  }}
+                  className="w-4 h-4 text-emerald-600 accent-emerald-600 cursor-pointer"
+                />
+              </div>
             </div>
 
-            <a
-              href="https://www.remove.bg/api"
-              target="_blank"
+            {/* Card 2: Remove.bg Cloud API */}
+            <div
+              onClick={() => {
+                setThumbnailEngine('removebg');
+                setShowRemoveBgConfig(true);
+                saveStoredMagicThumbnailEngine('removebg');
+              }}
+              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                thumbnailEngine === 'removebg'
+                  ? 'border-indigo-600 bg-indigo-50/40 shadow-xs'
+                  : 'border-neutral-200 hover:border-neutral-300 bg-white'
+              }`}
+            >
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center">
+                      <Cloud className="w-4 h-4" />
+                    </div>
+                    <span className="font-bold text-xs sm:text-sm text-neutral-900">
+                      Remove.bg Cloud API
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-neutral-200 text-neutral-800">
+                    Gunakan API Key
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 leading-relaxed pt-1">
+                  Memproses cutout via server cloud Remove.bg resmi. Mendukung multi-key failover otomatis (50 kredit free per akun). Jika kuota habis, otomatis dialihkan ke Imgly AI.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-200/60 text-xs">
+                <span className="text-[11px] font-medium text-neutral-500">
+                  {removeBgKeys.filter(k => k.trim()).length > 0
+                    ? `${removeBgKeys.filter(k => k.trim()).length} Key Terdaftar`
+                    : 'Input key diperlukan'}
+                </span>
+                <input
+                  type="radio"
+                  name="thumbnailEngine"
+                  checked={thumbnailEngine === 'removebg'}
+                  onChange={() => {
+                    setThumbnailEngine('removebg');
+                    setShowRemoveBgConfig(true);
+                    saveStoredMagicThumbnailEngine('removebg');
+                  }}
+                  className="w-4 h-4 text-indigo-600 accent-indigo-600 cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Toggle Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-neutral-50 border border-neutral-200/80 gap-3">
+            <div className="space-y-0.5">
+              <span className="text-xs font-bold text-neutral-800">
+                Mode Aktif Saat Ini: {thumbnailEngine === 'imgly' ? 'Imgly AI (Browser Lokal)' : 'Remove.bg Cloud API'}
+              </span>
+              <p className="text-[11px] text-neutral-500">
+                {thumbnailEngine === 'imgly'
+                  ? 'Magic Thumbnail berjalan gratis tanpa API key saat input produk. Kunci Remove.bg opsional sebagai cadangan.'
+                  : 'Magic Thumbnail memanggil Remove.bg terlebih dahulu, dengan failover otomatis ke Imgly jika kuota habis.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextEngine = thumbnailEngine === 'imgly' ? 'removebg' : 'imgly';
+                  setThumbnailEngine(nextEngine);
+                  if (nextEngine === 'removebg') setShowRemoveBgConfig(true);
+                  saveStoredMagicThumbnailEngine(nextEngine);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5 ${
+                  thumbnailEngine === 'removebg'
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                <span>Ganti ke {thumbnailEngine === 'imgly' ? 'Remove.bg API' : 'Imgly AI Browser'}</span>
+              </button>
+
+              {thumbnailEngine === 'imgly' && (
+                <button
+                  type="button"
+                  onClick={() => setShowRemoveBgConfig(prev => !prev)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>{showRemoveBgConfig ? 'Sembunyikan Kunci' : 'Kelola Kunci Remove.bg'}</span>
+                  {showRemoveBgConfig ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Remove.bg API Keys Pool Section (Shown if Remove.bg is active or expanded) */}
+          {(thumbnailEngine === 'removebg' || showRemoveBgConfig) && (
+            <div className="space-y-4 pt-2 border-t border-neutral-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Key className="w-4 h-4 text-indigo-600" />
+                  <h4 className="text-xs font-bold text-neutral-800 uppercase tracking-wider">
+                    Daftar API Key Remove.bg {thumbnailEngine === 'imgly' ? '(Sebagai Cadangan)' : '(Mesin Utama)'}
+                  </h4>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const nonEmpties = removeBgKeys.filter((k) => k.trim());
+                    const testedList = Object.values(keyCredits).filter((c) => c.success);
+                    const totalPoolCredits = testedList.reduce((acc, c) => acc + c.total, 0);
+
+                    if (testedList.length > 0) {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>Total Pool: {totalPoolCredits} Kredit ({testedList.length} Key)</span>
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                        nonEmpties.length > 0
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${nonEmpties.length > 0 ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
+                        {nonEmpties.length > 0 ? `${nonEmpties.length} Key Terpasang` : 'Belum Ada Key'}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Info Banner on Multi-Key Quota */}
+              <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-indigo-950 flex items-start gap-2.5">
+                <Layers className="w-4 h-4 text-indigo-700 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-indigo-900 leading-snug">
+                    Tips Kuota Melimpah (Gratis 50 Kredit / Akun Remove.bg):
+                  </p>
+                  <p className="text-[11px] text-indigo-800 leading-relaxed">
+                    Anda dapat mendaftarkan beberapa akun di <strong>remove.bg</strong> (masing-masing akun mendapat 50 free credits). Masukkan semua API key-nya di sini. Sistem akan otomatis memakai <strong>Key #1</strong>, dan jika kuotanya habis (402), otomatis langsung beralih ke <strong>Key #2</strong>, <strong>#3</strong>, dst. tanpa kendala!
+                  </p>
+                </div>
+              </div>
+
+              {/* Keys List */}
+              <div className="space-y-3.5">
+                {removeBgKeys.map((key, index) => {
+                  const isFirst = index === 0;
+                  const isShowing = !!showKeyMap[index];
+                  const isChecking = testingKeyIndex === index;
+                  const creditInfo = keyCredits[index];
+
+                  return (
+                    <div
+                      key={index}
+                      className="p-3.5 sm:p-4 rounded-xl border border-neutral-200 bg-neutral-50/40 space-y-2.5 transition-all hover:border-neutral-300"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-full bg-neutral-900 text-white text-[10px] font-bold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <span className="text-xs font-bold text-neutral-800">
+                            {isFirst ? 'API Key Utama (#1)' : `API Key Cadangan (#${index + 1})`}
+                          </span>
+                          {isFirst && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                              PRIORITAS 1
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Credit Status Badge */}
+                        {creditInfo && (
+                          <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 ${
+                            creditInfo.success
+                              ? creditInfo.total > 0
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-red-50 text-red-700 border-red-200'
+                          }`}>
+                            {creditInfo.success ? (
+                              <>
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>{creditInfo.total > 0 ? `${creditInfo.total} Kredit Tersedia` : '0 Kredit (Habis)'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="w-3 h-3 text-red-600" />
+                                <span>{creditInfo.message}</span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="relative flex-1">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400">
+                            <Key className="w-3.5 h-3.5" />
+                          </div>
+                          <input
+                            type={isShowing ? 'text' : 'password'}
+                            value={key}
+                            onChange={(e) => handleKeyChange(index, e.target.value)}
+                            placeholder={`Masukkan API key Remove.bg #${index + 1}...`}
+                            className="w-full pl-9 pr-10 py-2 rounded-xl border border-neutral-300 text-xs text-neutral-900 font-mono focus:outline-hidden focus:border-indigo-600 bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowKeyMap((prev) => ({ ...prev, [index]: !prev[index] }))}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition-colors"
+                            title={isShowing ? 'Sembunyikan' : 'Tampilkan'}
+                          >
+                            {isShowing ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Check single balance */}
+                          <button
+                            type="button"
+                            disabled={isChecking || !key.trim()}
+                            onClick={() => handleTestKeyIndex(index)}
+                            className="px-3 py-2 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-100 text-neutral-700 text-xs font-semibold transition-all flex items-center gap-1.5 disabled:opacity-40 cursor-pointer active:scale-98 shadow-2xs"
+                            title="Cek keaktifan key dan sisa kredit akun ini"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
+                            <span>{isChecking ? 'Mengecek...' : 'Cek Saldo'}</span>
+                          </button>
+
+                          {/* Remove Key button */}
+                          {removeBgKeys.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveKey(index)}
+                              className="p-2 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-600 text-xs transition-colors cursor-pointer"
+                              title="Hapus API key ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action Row: Add Key & Check All Balance */}
+              <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-neutral-100">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddKey}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all active:scale-98 cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Tambah API Key Cadangan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isTestingAll || removeBgKeys.filter((k) => k.trim()).length === 0}
+                    onClick={handleTestAllKeys}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all active:scale-98 disabled:opacity-50 cursor-pointer shadow-2xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isTestingAll ? 'animate-spin' : ''}`} />
+                    <span>{isTestingAll ? 'Mengecek Semua...' : 'Cek Saldo Semua Key'}</span>
+                  </button>
+                </div>
+
+                <a
+                  href="https://www.remove.bg/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline"
+                >
+                  <span>Dapatkan 50 Kredit Gratis di remove.bg/api</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline"
             >

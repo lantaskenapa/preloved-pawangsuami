@@ -52,6 +52,7 @@ export interface StoreSettings {
   gemini_api_key?: string;
   removebg_api_key?: string;
   removebg_api_keys?: string[];
+  magic_thumbnail_engine?: 'imgly' | 'removebg';
   updated_at: string;
 }
 

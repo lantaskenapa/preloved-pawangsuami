@@ -141,7 +141,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setMagicTargetIndex(targetIndex);
 
     try {
-      showToast('Sedang memproses Magic Thumbnail via Remove.bg...', 'info');
+      showToast('Sedang memproses Magic Thumbnail AI...', 'info');
 
       const result = await executeMagicThumbnail(targetImage);
       if (result.success && result.transparentImageUrl) {
@@ -150,10 +150,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           copy[targetIndex] = result.transparentImageUrl!;
           return copy;
         });
-        const keyNote = (result.totalKeys && result.totalKeys > 1 && (result.keyIndex ?? 0) > 0)
-          ? ` (Dialihkan ke Key Cadangan #${(result.keyIndex ?? 0) + 1})`
-          : '';
-        showToast(`✨ Magic Thumbnail berhasil! Background produk telah transparan via Remove.bg${keyNote}.`, 'success');
+        const methodDesc = result.method === 'imgly'
+          ? 'AI Browser (Imgly)'
+          : `Remove.bg${result.totalKeys && result.totalKeys > 1 && (result.keyIndex ?? 0) > 0 ? ` (Key #${(result.keyIndex ?? 0) + 1})` : ''}`;
+        showToast(`✨ Magic Thumbnail berhasil! Background produk transparan & centered via ${methodDesc}.`, 'success');
       } else {
         showToast(result.error || 'Gagal memproses Magic Thumbnail', 'error');
       }

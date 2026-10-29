@@ -316,5 +316,6 @@ export const INITIAL_SETTINGS: StoreSettings = {
   return_policy: 'Komplain barang harus menyertakan video unboxing utuh tanpa cut sesuai prosedur perlindungan pembeli Shopee Garansi.',
   gemini_api_key: '',
   removebg_api_key: '',
+  magic_thumbnail_engine: 'imgly',
   updated_at: new Date().toISOString(),
 };
