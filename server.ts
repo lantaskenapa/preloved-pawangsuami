@@ -172,11 +172,10 @@ async function startServer() {
       if (!effectiveKey) {
         return res.status(400).json({
           success: false,
-          error: 'API Key Gemini belum diatur. Silakan masukkan di menu Pengaturan Toko & DB.',
+          error: 'API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di menu "Pengaturan Toko & DB" terlebih dahulu.',
         });
       }
 
-      // Attempt Gemini image model editing if available
       try {
         const { GoogleGenAI } = await import('@google/genai');
         const ai = new GoogleGenAI({
@@ -203,7 +202,7 @@ async function startServer() {
                 },
               },
               {
-                text: 'Diagnose this product photo carefully: 1) Identify the main preloved product item (clothing, shoes, electronic device, game box, etc.) and preserve 100% of its details, physical silhouette, and edges. Do not erode, cut into, or alter any part of the item. 2) Identify the surrounding floor, table, or wall background and shadows. 3) Cleanly remove only the identified background, turning it into a transparent PNG alpha cutout suitable for an e-commerce catalog card.',
+                text: 'Precisely isolate and segment the main preloved product in this image (e.g. clothing, footwear, gadget, gaming hardware, console, accessory, collectibles) preserving all physical contours, edges, and details. Remove 100% of the surrounding background, room, floor, table, and casting shadows. The result must be exclusively a transparent PNG alpha cutout of the product with no background at all, optimized for e-commerce catalog display.',
               },
             ],
           },
@@ -221,18 +220,39 @@ async function startServer() {
             }
           }
         }
-      } catch (geminiErr: any) {
-        console.warn('[Gemini Magic Thumbnail warning]:', geminiErr?.message || geminiErr);
-      }
 
-      // Fallback signal for client-side canvas transparent cutout
-      return res.json({
-        success: false,
-        fallback: true,
-        message: 'Beralih ke mesin pemotongan transparan presisi...',
-      });
+        const textOutput = response?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).filter(Boolean).join(' ') || '';
+        return res.status(400).json({
+          success: false,
+          error: textOutput || 'Model Gemini tidak menghasilkan gambar transparan. Pastikan produk terlihat jelas dan coba lagi.',
+        });
+      } catch (geminiErr: any) {
+        console.error('[Gemini Magic Thumbnail Error]:', geminiErr);
+        let errorMsg = geminiErr?.message || 'Gagal memproses gambar dengan Gemini AI.';
+        try {
+          const parsed = JSON.parse(errorMsg);
+          if (parsed?.error?.message) {
+            errorMsg = parsed.error.message;
+          }
+        } catch {
+          // not JSON
+        }
+
+        if (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid')) {
+          errorMsg = 'API Key Gemini tidak valid atau dinonaktifkan. Periksa kembali di Pengaturan Toko & DB.';
+        } else if (errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('Quota exceeded') || errorMsg.includes('429')) {
+          errorMsg = 'Kuota API Key Gemini telah habis (429 Resource Exhausted). Silakan cek billing atau ganti API Key.';
+        } else if (errorMsg.includes('PERMISSION_DENIED')) {
+          errorMsg = 'Akses ditolak (Permission Denied). Pastikan model Gemini Image diizinkan pada project API Key Anda.';
+        }
+
+        return res.status(400).json({
+          success: false,
+          error: `Gemini API Error: ${errorMsg}`,
+        });
+      }
     } catch (err: any) {
-      return res.status(500).json({ success: false, error: err?.message || 'Gagal memproses Magic Thumbnail' });
+      return res.status(500).json({ success: false, error: err?.message || 'Gagal memproses Magic Thumbnail pada server' });
     }
   });
 

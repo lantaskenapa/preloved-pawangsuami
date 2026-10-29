@@ -41,15 +41,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
         {/* Image Container */}
         <div 
           onClick={() => onSelect(product)}
-          className="relative aspect-square w-full bg-white overflow-hidden cursor-pointer flex items-center justify-center p-3 border-b border-neutral-100/80"
+          className="relative aspect-square w-full bg-neutral-100 overflow-hidden cursor-pointer border-b border-neutral-100/80"
         >
           {primaryImage ? (
             <img
               src={primaryImage}
               alt={product.name}
-              className={`max-h-full max-w-full w-auto h-auto object-contain object-center transition-transform duration-300 ${
+              className={`w-full h-full object-cover object-center transition-transform duration-500 ease-out ${
                 isSold 
-                  ? 'grayscale-[30%] opacity-85 group-hover:scale-102' 
+                  ? 'grayscale-[30%] opacity-85 group-hover:scale-105' 
                   : 'group-hover:scale-105'
               }`}
               loading="lazy"

@@ -141,19 +141,18 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     setMagicTargetIndex(targetIndex);
 
     try {
-      const apiKey = (typeof window !== 'undefined' ? localStorage.getItem('psp_gemini_api_key') : '') || '';
-      showToast('AI sedang mendiagnosa background dan memproses Magic Thumbnail...', 'info');
+      showToast('Sedang memproses Magic Thumbnail dengan Gemini AI...', 'info');
 
-      const result = await executeMagicThumbnail(targetImage, apiKey);
+      const result = await executeMagicThumbnail(targetImage);
       if (result.success && result.transparentImageUrl) {
         setImages((prev) => {
           const copy = [...prev];
           copy[targetIndex] = result.transparentImageUrl!;
           return copy;
         });
-        showToast('✨ Magic Thumbnail berhasil! Background foto produk telah diubah menjadi transparan.', 'success');
+        showToast('✨ Magic Thumbnail Gemini berhasil! Background foto produk telah diubah menjadi transparan.', 'success');
       } else {
-        showToast(`Gagal: ${result.error || 'Terjadi kendala saat memproses gambar'}`, 'error');
+        showToast(result.error || 'Gagal memproses Magic Thumbnail dengan Gemini AI', 'error');
       }
     } catch (err: any) {
       showToast(err?.message || 'Gagal memproses Magic Thumbnail', 'error');
@@ -616,11 +615,11 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                               : 'border-neutral-200 hover:border-neutral-400'
                         } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100'}`}
                       >
-                        <div className="w-full h-full flex items-center justify-center bg-white">
+                        <div className="w-full h-full bg-neutral-100">
                           <img
                             src={img}
                             alt={`foto ${index + 1}`}
-                            className="max-h-full max-w-full w-auto h-auto object-contain pointer-events-none p-1"
+                            className="w-full h-full object-cover object-center pointer-events-none"
                           />
                         </div>
 

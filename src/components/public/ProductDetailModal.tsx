@@ -104,7 +104,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           : 'border-neutral-200/80 opacity-70 hover:opacity-100'
                       }`}
                     >
-                      <img src={img} alt={`thumb ${idx}`} className="max-h-full max-w-full w-auto h-auto object-contain p-1 m-auto" />
+                      <img src={img} alt={`thumb ${idx}`} className="w-full h-full object-cover object-center" />
                     </button>
                   ))}
                 </div>

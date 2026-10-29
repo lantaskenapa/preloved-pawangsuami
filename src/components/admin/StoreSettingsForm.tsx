@@ -259,6 +259,8 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ apiKey: cleanGeminiKey }),
         }).catch(() => {});
+      } else {
+        localStorage.removeItem('psp_gemini_api_key');
       }
 
       // 2. Save settings to app storage & Supabase
