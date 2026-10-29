@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   CATEGORIES: 'psp_categories_v1',
   SETTINGS: 'psp_settings_v1',
   AUTH: 'psp_admin_session_v1',
+  ORIGINALS_REGISTRY: 'psp_originals_registry_v1',
 };
 
 // Dispatch change event to notify listening React components
@@ -16,6 +17,126 @@ function notifyChange() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('psp_data_updated'));
   }
+}
+
+// ---------------- PERSISTENT ORIGINAL IMAGES REGISTRY (INDEXEDDB + LOCALSTORAGE) ----------------
+const inMemoryOriginalsRegistry = new Map<string, string[]>();
+
+const IDB_NAME = 'psp_cache_db';
+const IDB_STORE = 'product_originals';
+
+function openOriginalsDB(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function saveToIndexedDB(key: string, data: string[]) {
+  const db = await openOriginalsDB();
+  if (!db) return;
+  try {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(data, key);
+  } catch {}
+}
+
+async function getFromIndexedDB(key: string): Promise<string[] | null> {
+  const db = await openOriginalsDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+/**
+ * Register original uncropped photos into persistent local cache so they are NEVER lost on save/edit
+ */
+export function registerProductOriginals(idOrSlug: string, originals: string[]) {
+  if (!idOrSlug || !originals || originals.length === 0) return;
+  inMemoryOriginalsRegistry.set(idOrSlug, originals);
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ORIGINALS_REGISTRY);
+      const map: Record<string, string[]> = raw ? JSON.parse(raw) : {};
+      map[idOrSlug] = originals;
+      localStorage.setItem(STORAGE_KEYS.ORIGINALS_REGISTRY, JSON.stringify(map));
+    } catch {
+      // LocalStorage might be full; in-memory map & IndexedDB still preserve it
+    }
+    saveToIndexedDB(idOrSlug, originals).catch(() => {});
+  }
+}
+
+/**
+ * Synchronously retrieve preserved uncropped original photos from memory or localStorage
+ */
+export function getProductOriginals(id?: string, slug?: string): string[] | null {
+  if (id && inMemoryOriginalsRegistry.has(id)) {
+    return inMemoryOriginalsRegistry.get(id)!;
+  }
+  if (slug && inMemoryOriginalsRegistry.has(slug)) {
+    return inMemoryOriginalsRegistry.get(slug)!;
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEYS.ORIGINALS_REGISTRY);
+      if (raw) {
+        const map: Record<string, string[]> = JSON.parse(raw);
+        if (id && map[id] && map[id].length > 0) {
+          inMemoryOriginalsRegistry.set(id, map[id]);
+          return map[id];
+        }
+        if (slug && map[slug] && map[slug].length > 0) {
+          inMemoryOriginalsRegistry.set(slug, map[slug]);
+          return map[slug];
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Asynchronously retrieve preserved uncropped original photos from IndexedDB if not found in sync memory
+ */
+export async function getProductOriginalsAsync(id?: string, slug?: string): Promise<string[] | null> {
+  const syncVal = getProductOriginals(id, slug);
+  if (syncVal && syncVal.length > 0) return syncVal;
+  if (id) {
+    const fromIdb = await getFromIndexedDB(id);
+    if (fromIdb && fromIdb.length > 0) {
+      inMemoryOriginalsRegistry.set(id, fromIdb);
+      return fromIdb;
+    }
+  }
+  if (slug) {
+    const fromIdb = await getFromIndexedDB(slug);
+    if (fromIdb && fromIdb.length > 0) {
+      inMemoryOriginalsRegistry.set(slug, fromIdb);
+      return fromIdb;
+    }
+  }
+  return null;
 }
 
 // Generate valid UUID compatible with Supabase UUID and TEXT primary keys
@@ -30,31 +151,51 @@ export function generateProductId(): string {
   });
 }
 
+// In-memory cache to guarantee products are never lost when localStorage quota is full
+let memoryProductsCache: Product[] | null = null;
+
 // Helper to safely write to localStorage without throwing QuotaExceededError
 export function safeSaveProductsToLocalStorage(products: Product[]): boolean {
   if (typeof window === 'undefined') return false;
+  // Keep memory cache updated
+  memoryProductsCache = [...products];
+
   try {
     localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
     return true;
-  } catch (err: any) {
-    console.warn('LocalStorage quota warning, creating lightweight storage cache:', err);
+  } catch {
     try {
-      // If quota exceeded, trim secondary high-res base64 images from localStorage copy
-      const lightweight = products.map((p) => ({
+      // Tier 1: Quota exceeded. Strip original_images and replace heavy base64 data URLs
+      const tier1 = products.map((p) => ({
         ...p,
-        images: p.images.map((img, idx) => {
-          if (idx === 0) return img; // keep primary cover
-          if (img.startsWith('data:') && img.length > 50000) {
+        original_images: [],
+        images: p.images.map((img) => {
+          if (img.startsWith('data:') && img.length > 25000) {
             return 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80';
           }
           return img;
         }),
       }));
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(lightweight));
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(tier1));
       return true;
-    } catch (e2) {
-      console.warn('LocalStorage completely full, proceeding without local caching:', e2);
-      return false;
+    } catch {
+      try {
+        // Tier 2: Strip all data: URLs in localStorage (full data remains safely in memory and Supabase)
+        const tier2 = products.map((p) => ({
+          ...p,
+          original_images: [],
+          images: p.images.map((img) =>
+            img.startsWith('data:')
+              ? 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'
+              : img
+          ),
+        }));
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(tier2));
+        return true;
+      } catch {
+        // Tier 3: LocalStorage is completely full; session continues in memory
+        return false;
+      }
     }
   }
 }
@@ -160,8 +301,45 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
       }
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
-        let dbProducts = data as Product[];
+        let dbProducts = (data as any[]).map((row) => {
+          let origs: string[] = [];
+          if (Array.isArray(row.original_images) && row.original_images.length > 0) {
+            origs = row.original_images;
+          }
+          // Check embedded metadata in story fallback
+          if (origs.length === 0 && row.story && typeof row.story === 'string' && row.story.startsWith('{"_psp_meta":')) {
+            try {
+              const meta = JSON.parse(row.story);
+              if (Array.isArray(meta.original_images) && meta.original_images.length > 0) {
+                origs = meta.original_images;
+                row.story = meta.userStory || null;
+              }
+            } catch {}
+          }
+          // Check persistent local registry
+          if (origs.length === 0) {
+            const fromRegistry = getProductOriginals(row.id, row.slug);
+            if (fromRegistry && fromRegistry.length > 0) {
+              origs = fromRegistry;
+            }
+          }
+          const finalImages = Array.isArray(row.images) ? row.images : [];
+          if (origs.length === 0) {
+            origs = [...finalImages];
+          }
+          // Guarantee registered in registry
+          registerProductOriginals(row.id, origs);
+          if (row.slug) registerProductOriginals(row.slug, origs);
+
+          return {
+            ...row,
+            images: finalImages,
+            original_images: origs,
+          } as Product;
+        });
+
         safeSaveProductsToLocalStorage(dbProducts);
+        memoryProductsCache = [...dbProducts];
         return dbProducts;
       }
     } catch (e) {
@@ -172,12 +350,30 @@ export async function getProducts(includeDrafts = false): Promise<Product[]> {
   // Fallback to local storage
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    const list: Product[] = raw ? JSON.parse(raw) : INITIAL_PRODUCTS;
+    const list: Product[] = raw ? JSON.parse(raw) : (memoryProductsCache || INITIAL_PRODUCTS);
+    const enriched = list.map((p) => {
+      let origs = p.original_images && p.original_images.length > 0 ? p.original_images : null;
+      if (!origs) {
+        origs = getProductOriginals(p.id, p.slug);
+      }
+      if (!origs || origs.length === 0) {
+        origs = p.images ? [...p.images] : [];
+      }
+      registerProductOriginals(p.id, origs);
+      if (p.slug) registerProductOriginals(p.slug, origs);
+      return {
+        ...p,
+        original_images: origs,
+      };
+    });
+
+    memoryProductsCache = [...enriched];
+
     if (includeDrafts) {
-      return list;
+      return enriched;
     }
     // Public view shows published, sold, and booked items (only drafts are hidden)
-    return list.filter(item => item.status !== 'draft');
+    return enriched.filter(item => item.status !== 'draft');
   } catch (err) {
     console.error('Error reading products:', err);
     return INITIAL_PRODUCTS.filter(p => includeDrafts || p.status !== 'draft');
@@ -196,8 +392,26 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 
 export async function saveProduct(productInput: Partial<Product> & { name: string; price: number; category: string }): Promise<Product> {
   initializeStorage();
-  const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
+  let currentList: Product[] = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+    if (raw) currentList = JSON.parse(raw);
+  } catch {
+    currentList = [];
+  }
+
+  // Merge with memoryProductsCache if available
+  if (memoryProductsCache && memoryProductsCache.length > 0) {
+    for (const cached of memoryProductsCache) {
+      if (!currentList.some((p) => p.id === cached.id)) {
+        currentList.push(cached);
+      }
+    }
+  }
+
+  if (currentList.length === 0) {
+    currentList = [...INITIAL_PRODUCTS];
+  }
 
   const now = new Date().toISOString();
   let savedProduct: Product;
@@ -221,25 +435,73 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
     processedImages = ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'];
   }
 
+  // Ensure original images are safely compressed without losing resolution
+  const rawOriginalsInput = (productInput.original_images && productInput.original_images.length > 0)
+    ? productInput.original_images
+    : (productInput.images && productInput.images.length > 0 ? productInput.images : processedImages);
+
+  const processedOriginals: string[] = await Promise.all(
+    rawOriginalsInput.map(async (img) => {
+      if (img.startsWith('data:image/') && img.length > 250000) {
+        try {
+          return await compressDataUrl(img, { maxWidth: 1400, maxHeight: 1400, quality: 0.85 });
+        } catch {
+          return img;
+        }
+      }
+      return img;
+    })
+  );
+
   if (productInput.id) {
-    // Edit existing product
-    const index = currentList.findIndex((p) => p.id === productInput.id);
-    if (index === -1) throw new Error('Produk tidak ditemukan');
-
+    // Edit existing product or upsert if missing from local array
+    let index = currentList.findIndex((p) => p.id === productInput.id);
     const cleanSlug = productInput.slug || generateUniqueSlug(productInput.name, currentList, productInput.id);
-    const rawOriginals = productInput.original_images && productInput.original_images.length > 0
-      ? productInput.original_images
-      : (currentList[index]?.original_images || processedImages);
+    const existingOriginals = (index !== -1 ? currentList[index]?.original_images : null) || getProductOriginals(productInput.id, cleanSlug);
 
-    savedProduct = {
-      ...currentList[index],
-      ...productInput,
-      slug: cleanSlug,
-      images: processedImages,
-      original_images: rawOriginals,
-      updated_at: now,
-    } as Product;
-    currentList[index] = savedProduct;
+    const finalOriginals = (processedOriginals && processedOriginals.length > 0)
+      ? processedOriginals
+      : (existingOriginals && existingOriginals.length > 0 ? existingOriginals : processedImages);
+
+    if (index !== -1) {
+      savedProduct = {
+        ...currentList[index],
+        ...productInput,
+        slug: cleanSlug,
+        images: processedImages,
+        original_images: finalOriginals,
+        updated_at: now,
+      } as Product;
+      currentList[index] = savedProduct;
+    } else {
+      // Upsert product cleanly instead of throwing "Produk tidak ditemukan"
+      savedProduct = {
+        id: productInput.id,
+        name: productInput.name.trim(),
+        slug: cleanSlug,
+        price: Number(productInput.price) || 0,
+        original_price: productInput.original_price ? Number(productInput.original_price) : undefined,
+        category: productInput.category || 'others',
+        condition: normalizeCondition(productInput.condition),
+        description: productInput.description || '',
+        story: productInput.story || '',
+        completeness: productInput.completeness || [],
+        minus_points: productInput.minus_points || [],
+        images: processedImages,
+        original_images: finalOriginals,
+        shopee_url: productInput.shopee_url || 'https://shopee.co.id',
+        status: productInput.status || 'published',
+        is_featured: !!productInput.is_featured,
+        weight_grams: productInput.weight_grams ? Number(productInput.weight_grams) : 500,
+        created_at: productInput.created_at || now,
+        updated_at: now,
+      } as Product;
+      currentList.unshift(savedProduct);
+    }
+
+    // Register in persistent originals registry immediately
+    registerProductOriginals(savedProduct.id, finalOriginals);
+    registerProductOriginals(cleanSlug, finalOriginals);
   } else {
     // Create new product with valid UUID
     const newId = generateProductId();
@@ -258,7 +520,7 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
       completeness: productInput.completeness || [],
       minus_points: productInput.minus_points || [],
       images: processedImages,
-      original_images: productInput.original_images && productInput.original_images.length > 0 ? productInput.original_images : processedImages,
+      original_images: processedOriginals,
       shopee_url: productInput.shopee_url || 'https://shopee.co.id',
       status: productInput.status || 'published',
       is_featured: !!productInput.is_featured,
@@ -267,6 +529,10 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
       updated_at: now,
     };
     currentList.unshift(savedProduct);
+
+    // Register in persistent originals registry immediately
+    registerProductOriginals(savedProduct.id, processedOriginals);
+    registerProductOriginals(cleanSlug, processedOriginals);
   }
 
   // Safe local storage persistence (never throws QuotaExceededError)
@@ -276,6 +542,13 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
+      // Embed cloud metadata backup in story column so original_images is NEVER lost even if Supabase table lacks original_images column
+      const metaStory = JSON.stringify({
+        _psp_meta: true,
+        original_images: savedProduct.original_images,
+        userStory: savedProduct.story || null,
+      });
+
       const supabasePayload = {
         id: savedProduct.id,
         name: savedProduct.name,
@@ -285,7 +558,7 @@ export async function saveProduct(productInput: Partial<Product> & { name: strin
         category: savedProduct.category,
         condition: savedProduct.condition,
         description: savedProduct.description || '',
-        story: savedProduct.story || null,
+        story: metaStory,
         completeness: savedProduct.completeness || [],
         minus_points: savedProduct.minus_points || [],
         images: savedProduct.images || [],
@@ -345,26 +618,37 @@ export async function syncAllProductsToSupabase(): Promise<{ success: boolean; c
   const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
 
   try {
-    let formattedPayloads = currentList.map((p) => ({
-      id: p.id,
-      name: p.name,
-      slug: p.slug || slugify(p.name),
-      price: Math.round(Number(p.price)),
-      original_price: p.original_price ? Math.round(Number(p.original_price)) : null,
-      category: p.category,
-      condition: p.condition,
-      description: p.description || '',
-      story: p.story || null,
-      completeness: p.completeness || [],
-      minus_points: p.minus_points || [],
-      images: p.images || [],
-      shopee_url: p.shopee_url,
-      status: p.status || 'published',
-      is_featured: !!p.is_featured,
-      weight_grams: p.weight_grams ? Math.round(Number(p.weight_grams)) : 500,
-      created_at: p.created_at || new Date().toISOString(),
-      updated_at: p.updated_at || new Date().toISOString(),
-    }));
+    let formattedPayloads = currentList.map((p) => {
+      const origs = (p.original_images && p.original_images.length > 0)
+        ? p.original_images
+        : (getProductOriginals(p.id, p.slug) || p.images || []);
+
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug || slugify(p.name),
+        price: Math.round(Number(p.price)),
+        original_price: p.original_price ? Math.round(Number(p.original_price)) : null,
+        category: p.category,
+        condition: p.condition,
+        description: p.description || '',
+        story: JSON.stringify({
+          _psp_meta: true,
+          original_images: origs,
+          userStory: p.story || null,
+        }),
+        completeness: p.completeness || [],
+        minus_points: p.minus_points || [],
+        images: p.images || [],
+        original_images: origs,
+        shopee_url: p.shopee_url,
+        status: p.status || 'published',
+        is_featured: !!p.is_featured,
+        weight_grams: p.weight_grams ? Math.round(Number(p.weight_grams)) : 500,
+        created_at: p.created_at || new Date().toISOString(),
+        updated_at: p.updated_at || new Date().toISOString(),
+      };
+    });
 
     let lastError: any = null;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -479,20 +763,51 @@ export async function bulkUpdateProductStatus(ids: string[], newStatus: ProductS
 export async function updateProductStatus(id: string, newStatus: ProductStatus): Promise<Product> {
   initializeStorage();
   const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
-  const now = new Date().toISOString();
+  let currentList: Product[] = raw ? JSON.parse(raw) : [];
 
-  const index = currentList.findIndex((p) => p.id === id);
-  if (index === -1) {
-    throw new Error('Produk tidak ditemukan');
+  if (memoryProductsCache && memoryProductsCache.length > 0) {
+    for (const cached of memoryProductsCache) {
+      if (!currentList.some((p) => p.id === cached.id)) {
+        currentList.push(cached);
+      }
+    }
+  }
+  if (currentList.length === 0) {
+    currentList = [...INITIAL_PRODUCTS];
   }
 
-  const updatedProduct: Product = {
-    ...currentList[index],
-    status: newStatus,
-    updated_at: now,
-  };
-  currentList[index] = updatedProduct;
+  const now = new Date().toISOString();
+  let index = currentList.findIndex((p) => p.id === id);
+
+  let updatedProduct: Product;
+  if (index !== -1) {
+    updatedProduct = {
+      ...currentList[index],
+      status: newStatus,
+      updated_at: now,
+    };
+    currentList[index] = updatedProduct;
+  } else {
+    updatedProduct = {
+      id,
+      name: 'Produk',
+      slug: id,
+      price: 0,
+      category: 'others',
+      condition: 'Cukup Baik',
+      description: '',
+      completeness: [],
+      minus_points: [],
+      images: ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
+      original_images: ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
+      shopee_url: 'https://shopee.co.id',
+      status: newStatus,
+      updated_at: now,
+      created_at: now,
+    };
+    currentList.unshift(updatedProduct);
+  }
+
   safeSaveProductsToLocalStorage(currentList);
 
   const supabase = getSupabaseClient();
@@ -517,11 +832,21 @@ export async function updateProductStatus(id: string, newStatus: ProductStatus):
 export async function toggleProductStatus(id: string, targetStatus?: ProductStatus): Promise<Product> {
   initializeStorage();
   const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-  const currentList: Product[] = raw ? JSON.parse(raw) : [...INITIAL_PRODUCTS];
-  const current = currentList.find((p) => p.id === id);
-  if (!current) throw new Error('Produk tidak ditemukan');
+  let currentList: Product[] = raw ? JSON.parse(raw) : [];
 
-  const nextStatus = targetStatus || (current.status === 'sold' ? 'published' : 'sold');
+  if (memoryProductsCache && memoryProductsCache.length > 0) {
+    for (const cached of memoryProductsCache) {
+      if (!currentList.some((p) => p.id === cached.id)) {
+        currentList.push(cached);
+      }
+    }
+  }
+  if (currentList.length === 0) {
+    currentList = [...INITIAL_PRODUCTS];
+  }
+
+  const current = currentList.find((p) => p.id === id);
+  const nextStatus = targetStatus || (current?.status === 'sold' ? 'published' : 'sold');
   return updateProductStatus(id, nextStatus);
 }
 

@@ -25,6 +25,7 @@ import {
 import { executeMagicThumbnail } from '../../lib/magicThumbnail';
 import { ImageCropAdjustModal } from './ImageCropAdjustModal';
 import { useToast } from '../ui/Toast';
+import { getProductOriginals, getProductOriginalsAsync, registerProductOriginals } from '../../lib/storage';
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -82,12 +83,32 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setDescription(productToEdit.description);
       setShopeeUrl(productToEdit.shopee_url);
       setStatus(productToEdit.status);
-      setImages(productToEdit.images || []);
-      setOriginalImages(
-        productToEdit.original_images && productToEdit.original_images.length > 0
-          ? [...productToEdit.original_images]
-          : (productToEdit.images ? [...productToEdit.images] : [])
-      );
+      const curImages = productToEdit.images || [];
+      setImages(curImages);
+
+      // Load preserved original photos: priority productToEdit.original_images -> persistent registry -> curImages
+      const preserved = (productToEdit.original_images && productToEdit.original_images.length > 0)
+        ? [...productToEdit.original_images]
+        : (getProductOriginals(productToEdit.id, productToEdit.slug) || [...curImages]);
+
+      const filledOriginals = curImages.map((img, idx) => preserved[idx] || img);
+      setOriginalImages(filledOriginals);
+
+      // Asynchronous check for IndexedDB backup
+      if (productToEdit.id || productToEdit.slug) {
+        getProductOriginalsAsync(productToEdit.id, productToEdit.slug).then((asyncOriginals) => {
+          if (asyncOriginals && asyncOriginals.length > 0) {
+            setOriginalImages((prev) => {
+              const needsUpdate = prev.some((pImg, idx) => pImg === curImages[idx] && asyncOriginals[idx] && asyncOriginals[idx] !== pImg);
+              if (needsUpdate) {
+                return curImages.map((img, idx) => asyncOriginals[idx] || prev[idx] || img);
+              }
+              return prev;
+            });
+          }
+        });
+      }
+
       setActivePhotoIndex(null);
       setCompletenessList(productToEdit.completeness || []);
       setMinusPointsList(productToEdit.minus_points || []);
@@ -347,6 +368,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         finalMinusPoints.push(minusPointInput.trim());
       }
 
+      const finalOriginals = images.map((img, idx) => originalImages[idx] || img);
+
+      if (productToEdit?.id) {
+        registerProductOriginals(productToEdit.id, finalOriginals);
+      }
+
       await onSave({
         id: productToEdit?.id,
         name: name.trim(),
@@ -358,7 +385,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         shopee_url: shopeeUrl.trim(),
         status,
         images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1526738549149-8e07eca6c147?auto=format&fit=crop&w=1000&q=80'],
-        original_images: originalImages.length > 0 ? originalImages : images,
+        original_images: finalOriginals,
         completeness: finalCompleteness,
         minus_points: finalMinusPoints,
         is_featured: isFeatured,
@@ -1009,23 +1036,19 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           isThumbnail={adjustingImageIndex === 0}
           hasBeenAdjusted={Boolean(originalImages[adjustingImageIndex] && originalImages[adjustingImageIndex] !== images[adjustingImageIndex])}
           onClose={() => setAdjustingImageIndex(null)}
-          onResetToInitial={() => {
-            const initialImg = originalImages[adjustingImageIndex] || images[adjustingImageIndex];
-            setImages((prev) => {
-              const copy = [...prev];
-              copy[adjustingImageIndex] = initialImg;
-              return copy;
-            });
-            setAdjustingImageIndex(null);
-            showToast('Foto dikembalikan ke resolusi dan tampilan uncropped awal!', 'success');
-          }}
           onApply={(adjustedDataUrl) => {
+            const currentOriginal = originalImages[adjustingImageIndex] || images[adjustingImageIndex];
             setImages((prev) => {
               const copy = [...prev];
               copy[adjustingImageIndex] = adjustedDataUrl;
               return copy;
             });
-            // Note: originalImages[adjustingImageIndex] remains untouched so any future adjustment will still start from the initial resolution image!
+            // Ensure originalImages[adjustingImageIndex] explicitly retains the original uncropped photo
+            setOriginalImages((prev) => {
+              const copy = [...prev];
+              copy[adjustingImageIndex] = currentOriginal;
+              return copy;
+            });
             setAdjustingImageIndex(null);
             showToast('Posisi foto berhasil disesuaikan untuk thumbnail!', 'success');
           }}

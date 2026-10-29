@@ -934,12 +934,12 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
           <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/60 text-xs text-amber-950 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <span className="font-bold flex items-center gap-1.5 text-amber-900">
-                <span>⚡ Perintah SQL Supabase (Penting untuk Status Terjual & Poin Minus)</span>
+                <span>⚡ Perintah SQL Supabase (Status Terjual, Poin Minus & Foto Asli)</span>
               </span>
               <button
                 type="button"
                 onClick={() => {
-                  const sql = `ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;\nALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;`;
+                  const sql = `ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;\nALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;\nALTER TABLE public.products ADD COLUMN IF NOT EXISTS original_images JSONB DEFAULT '[]'::jsonb;\nNOTIFY pgrst, 'reload schema';`;
                   navigator.clipboard.writeText(sql);
                   setCopiedSql(true);
                   setTimeout(() => setCopiedSql(false), 2500);
@@ -952,11 +952,13 @@ export const StoreSettingsForm: React.FC<StoreSettingsFormProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-amber-800 leading-normal">
-              Jika tombol <em>Mark as Sold (Tandai Terjual)</em> atau penyimpanan minus poin di Supabase memerlukan izin, buka <strong>Supabase Dashboard &gt; SQL Editor</strong> lalu jalankan 2 baris perintah ini:
+              Untuk memastikan status Terjual, poin minus, dan foto asli uncropped tersimpan mulus di Supabase, jalankan perintah ini di <strong>Supabase Dashboard &gt; SQL Editor</strong>:
             </p>
-            <pre className="p-2 rounded-lg bg-neutral-900 text-neutral-100 font-mono text-[11px] overflow-x-auto select-all">
+            <pre className="p-2.5 rounded-lg bg-neutral-900 text-neutral-100 font-mono text-[11px] overflow-x-auto select-all leading-relaxed">
 ALTER TABLE public.products DROP CONSTRAINT IF EXISTS products_status_check;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS minus_points JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS original_images JSONB DEFAULT '[]'::jsonb;
+NOTIFY pgrst, 'reload schema';
             </pre>
           </div>
         </div>

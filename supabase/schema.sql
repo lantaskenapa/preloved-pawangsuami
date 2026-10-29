@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS public.products (
     completeness JSONB DEFAULT '[]'::jsonb,
     minus_points JSONB DEFAULT '[]'::jsonb,
     images JSONB DEFAULT '[]'::jsonb,
+    original_images JSONB DEFAULT '[]'::jsonb,
     shopee_url TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published', 'sold', 'booked')),
     is_featured BOOLEAN DEFAULT false,
@@ -154,6 +155,7 @@ ALTER TABLE public.products ADD COLUMN IF NOT EXISTS completeness JSONB DEFAULT 
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS weight_grams INT DEFAULT 500;
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'published';
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS original_images JSONB DEFAULT '[]'::jsonb;
 
 -- Muat ulang schema cache PostgREST Supabase
 NOTIFY pgrst, 'reload schema';

@@ -16,7 +16,6 @@ interface ImageCropAdjustModalProps {
   isThumbnail: boolean;
   onClose: () => void;
   onApply: (adjustedDataUrl: string) => void;
-  onResetToInitial?: () => void;
   hasBeenAdjusted?: boolean;
 }
 
@@ -27,13 +26,10 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
   isThumbnail,
   onClose,
   onApply,
-  onResetToInitial,
-  hasBeenAdjusted,
 }) => {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [rotation, setRotation] = useState(0); // 0, 90, 180, 270 degrees
-  const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain'); // 'contain' displays 100% of uncropped original photo
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
@@ -49,7 +45,6 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     if (!isOpen || !imageUrl) return;
 
     // Reset transform to initial uncropped state every time modal opens
-    setFitMode('contain');
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setRotation(0);
@@ -85,25 +80,18 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
     }
   };
 
-  // Calculate base scale: 'contain' shows 100% of the uncropped photo, 'cover' fills 1:1 square
+  // Base scale displays full uncropped original photo inside square frame
   const getBaseScale = useCallback(() => {
     if (!imgNaturalSize.width || !imgNaturalSize.height) return 1;
     const isSwapped = rotation % 180 !== 0;
     const effWidth = isSwapped ? imgNaturalSize.height : imgNaturalSize.width;
     const effHeight = isSwapped ? imgNaturalSize.width : imgNaturalSize.height;
 
-    if (fitMode === 'contain') {
-      return Math.min(
-        VIEWPORT_SIZE / effWidth,
-        VIEWPORT_SIZE / effHeight
-      );
-    }
-
-    return Math.max(
+    return Math.min(
       VIEWPORT_SIZE / effWidth,
       VIEWPORT_SIZE / effHeight
     );
-  }, [imgNaturalSize, rotation, fitMode]);
+  }, [imgNaturalSize, rotation]);
 
   // Max drag bounds
   const getPanBounds = useCallback(() => {
@@ -283,45 +271,6 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
 
         {/* Framing Canvas / Viewport */}
         <div className="p-4 sm:p-6 flex flex-col items-center bg-neutral-100/50">
-          {/* Fit Mode Toggle: Foto Utuh (No crop) vs Penuhi Kotak (Cover) */}
-          <div className="flex items-center justify-between w-full max-w-[300px] mb-3">
-            <span className="text-[11px] font-bold text-neutral-600">Framing:</span>
-            <div className="flex items-center bg-white p-0.5 rounded-xl border border-neutral-200/90 shadow-2xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setFitMode('contain');
-                  setZoom(1);
-                  setPan({ x: 0, y: 0 });
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  fitMode === 'contain'
-                    ? 'bg-neutral-900 text-white shadow-xs'
-                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
-                }`}
-                title="Tampilkan 100% foto sebelum di-crop secara utuh"
-              >
-                Foto Utuh (Sebelum Crop)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setFitMode('cover');
-                  setZoom(1);
-                  setPan({ x: 0, y: 0 });
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  fitMode === 'cover'
-                    ? 'bg-neutral-900 text-white shadow-xs'
-                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
-                }`}
-                title="Penuhi bingkai kotak 1:1"
-              >
-                Penuhi Kotak
-              </button>
-            </div>
-          </div>
-
           {/* Square Viewport */}
           <div
             ref={containerRef}
@@ -416,7 +365,6 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setFitMode('contain');
                   setZoom(1);
                   setPan({ x: 0, y: 0 });
                   setRotation(0);
@@ -469,21 +417,10 @@ export const ImageCropAdjustModal: React.FC<ImageCropAdjustModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-neutral-300 text-xs sm:text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors"
+              className="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-neutral-300 text-xs sm:text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
             >
               Batal
             </button>
-            {onResetToInitial && (
-              <button
-                type="button"
-                onClick={onResetToInitial}
-                className="px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                title="Kembalikan foto ke resolusi dan tampilan uncropped saat pertama diunggah"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
-                <span>Foto Asli (Sebelum Crop)</span>
-              </button>
-            )}
           </div>
 
           <button
